@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Word Run Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+:root {
+  --tile-size: 48px;
+  --green: #21c267;
+  --yellow: #ffc838;
+  --gray: #636678;
+  --dark: #15172b;
+  --surface: #22263d;
+  --accent: #6c63ff;
+  --dgray: #23242f;
+  --kbgray: #55565e;
+}
+body {
+  background: linear-gradient(120deg, #22263d 40%, #2b223d 100%);
+  color: #f3f3f8;
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+header {
+  max-width: 600px;
+  margin: 2.5em auto 0 auto;
+  text-align: center;
+}
+h1 {
+  font-size: 2.6em;
+  font-weight: 900;
+  letter-spacing: -2px;
+  background: linear-gradient(90deg, #ffd700 25%, #21c267 85%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+h2 { margin: 0.5em 0 0.3em 0; }
+#main {
+  max-width: 900px;
+  margin: 2em auto;
+  background: var(--surface);
+  padding: 2em 2.2em 2em 2.2em;
+  border-radius: 1.4em;
+  box-shadow: 0 10px 60px #1116;
+  display: flex;
+  gap: 2.2em;
+  justify-content: flex-start;
+}
+#main-content { flex: 1; }
+#upgrade-sidebar {
+  min-width: 230px;
+  max-width: 290px;
+  background: #23243b;
+  border-radius: 1.1em;
+  padding: 1em 1em 1em 1.3em;
+  margin-left: 1em;
+  box-shadow: 0 2px 14px #10113a36;
+  font-size: 1em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9em;
+  align-items: flex-start;
+  height: fit-content;
+}
+.upg-side-title {
+  font-size: 1.22em;
+  font-weight: 700;
+  color: #ffd700;
+  margin-bottom: 0.3em;
+  margin-left: -0.25em;
+}
+.upg-side-row {
+  background: #292d47;
+  border-radius: 0.7em;
+  margin-bottom: 0.23em;
+  padding: 0.35em 0.7em 0.4em 0.6em;
+  color: #fff;
+  font-size: 1.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  width: 100%;
+  position: relative;
+}
+.upg-side-row[disabled] { opacity: 0.45; }
+.upg-use-btn {
+  background: #21c267;
+  color: #fff;
+  border: none;
+  border-radius: 1em;
+  padding: 0.19em 1.09em;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  transition: background 0.13s;
+}
+.upg-use-btn:disabled {
+  background: #555c6e;
+  cursor: not-allowed;
+}
+.upg-used-label {
+  background: #636678;
+  color: #eee;
+  border-radius: 0.8em;
+  padding: 0.1em 0.7em;
+  margin-left: auto;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+.upg-count-label {
+  background: #232b46;
+  color: #ffc838;
+  font-weight: bold;
+  border-radius: 0.7em;
+  padding: 0.06em 0.85em 0.13em 0.85em;
+  font-size: 1.1em;
+  margin-left: 0.5em;
+}
+.upg-upgrade-btn {
+  background: #23b3f1;
+  color: #fff;
+  border: none;
+  border-radius: 0.9em;
+  font-size: 0.96em;
+  font-weight: 600;
+  padding: 0.11em 0.8em;
+  margin-left: 0.5em;
+  cursor: pointer;
+}
+.upg-upgrade-btn:disabled { background: #555c6e; cursor: not-allowed;}
+.stat {
+  display: inline-block;
+  background: #191c32cc;
+  color: #ffd700;
+  border-radius: 1em;
+  padding: 0.5em 1.5em;
+  margin: 0 0.5em 1em 0;
+  font-size: 1.25em;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+.menu-btn {
+  display: inline-block;
+  padding: 0.6em 1.8em;
+  margin: 0.6em;
+  background: linear-gradient(90deg, var(--accent) 30%, #23b3f1 100%);
+  color: #fff;
+  border: none;
+  border-radius: 2em;
+  font-weight: bold;
+  font-size: 1.1em;
+  cursor: pointer;
+  box-shadow: 0 2px 16px #6c63ff55;
+  transition: background 0.17s, transform 0.09s;
+}
+.menu-btn:hover { background: linear-gradient(90deg, #23b3f1 20%, var(--accent) 90%); transform: scale(1.07);}
+.tile-row { display: flex; gap: 0.4em; justify-content: center; margin-bottom: .18em;}
+.tile {
+  width: var(--tile-size); height: var(--tile-size);
+  background: var(--gray); color: #fff;
+  font-size: 2em; font-weight: bold;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px #0005;
+  text-transform: uppercase;
+  border: 2.5px solid #2224;
+  transition: background 0.19s, color 0.15s;
+  user-select: none;
+  animation: pop .36s cubic-bezier(.3,1.5,.7,1);
+}
+.tile.green { background: var(--green); color: #fff; border-color: #25b365;}
+.tile.yellow { background: var(--yellow); color: #6e5100; border-color: #e1b920;}
+.tile.gray { background: var(--gray);}
+@keyframes pop {
+  0% {transform: scale(0.89);}
+  70% {transform: scale(1.13);}
+  100% {transform: scale(1);}
+}
+input[type="text"].guess-input {
+  width: 100%;
+  font-size: 1.6em;
+  background: #232744;
+  color: #fff;
+  padding: 0.25em 0.6em;
+  margin: 0.5em 0 0.5em 0;
+  border-radius: 0.6em;
+  border: 2px solid #232744;
+  outline: none;
+  box-sizing: border-box;
+  font-family: inherit;
+  letter-spacing: 0.18em;
+}
+input[type="text"].guess-input:focus { border-color: var(--accent);}
+button:active { transform: scale(0.96);}
+.upgrade-card, .modifier-card {
+  background: #292d47;
+  border-radius: 1.1em;
+  margin: 0.6em 0;
+  padding: 1em 1.2em;
+  box-shadow: 0 2px 18px #13113c33;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  justify-content: space-between;
+  position: relative;
+}
+.upgrade-name, .modifier-name { font-weight: bold; font-size: 1.1em;}
+.upgrade-cost { color: #ffd700; margin-left: 0.5em;}
+.modifier-status {
+  background: #1a1c2d;
+  color: #21c267;
+  border-radius: 0.8em;
+  padding: 0.12em 0.8em;
+  font-size: 0.92em;
+}
+.upgrade-btn, .modifier-btn {
+  background: #23b3f1; color: #fff;
+  font-weight: bold; border: none;
+  padding: 0.4em 1.2em; border-radius: 1.5em; cursor: pointer;
+  transition: background 0.14s;
+}
+.upgrade-btn[disabled], .modifier-btn[disabled] {opacity: 0.56; cursor: not-allowed;}
+.upgrade-btn:hover:not([disabled]) {background: #21c267;}
+.modifier-btn:hover:not([disabled]) {background: #ffd700; color: #1a1c2d;}
+.inventory-list {
+  list-style: none; padding: 0; margin: 0.5em 0 0 0;
+  display: flex; flex-wrap: wrap; gap: .7em;
+}
+.inventory-item {
+  background: #363956; color: #fff;
+  border-radius: 0.8em;
+  padding: 0.24em 1em;
+  font-size: 1em;
+  font-weight: 500;
+}
+.message { color: #f08ca6; min-height: 1.7em; font-size: 1.07em; text-align: center; margin-bottom: 0.2em;}
+.hint-history { color: #2af095; font-size:1.04em; margin: 0.6em 0 0.1em 0; }
+label { font-size: 1em; color: #ffc838;}
+hr { border: none; border-top: 1.5px solid #323255; margin: 1.5em 0;}
+.modal-bg {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(20,20,45,0.82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10;
+}
+.modal-panel {
+  background: #1d1e2c;
+  border-radius: 1.2em;
+  padding: 2.1em 2em;
+  box-shadow: 0 12px 64px #1119;
+  min-width: 280px; max-width: 95vw;
+  text-align: center;
+  animation: pop .4s cubic-bezier(.3,1.5,.7,1);
+  position: relative;
+}
+.kb-row {
+  display: flex; justify-content: center; gap: 0.2em; margin: 0.11em 0 0.15em 0;
+}
+.kb-key {
+  min-width: 37px; height: 46px;
+  background: var(--kbgray);
+  color: #fff; font-size: 1.25em; font-weight: 700;
+  border: none; border-radius: 0.5em;
+  margin: 0 1.5px;
+  display: flex; align-items: center; justify-content: center;
+  user-select: none;
+  transition: background 0.13s, color 0.12s;
+  pointer-events: none;
+}
+.kb-key.green { background: var(--green);}
+.kb-key.yellow { background: var(--yellow); color: #6e5100;}
+.kb-key.gray { background: #35374a; color: #c7c7c7;}
+.kb-key.dark { background: #15151b;}
+.timer-box {
+  background: #222b35;
+  color: #ffc838;
+  font-weight: bold;
+  border-radius: 0.6em;
+  padding: 0.2em 1em;
+  font-size: 1.15em;
+  margin: 0 auto 0.5em auto;
+  width: max-content;
+}
+  .stats-title { font-size:1.45em; color:#ffd700; font-weight:700; margin:0.4em 0 0.5em 0;}
+  .stats-group {
+    background: #23243b;
+    border-radius: 1.05em;
+    padding: 0.8em 2.2em 0.6em 2.2em;
+    margin-bottom: 1.2em;
+    margin-right: 1.3em;
+    display: inline-block;
+    vertical-align: top;
+    min-width: 330px;
+    box-shadow: 0 2px 18px #18185424;
+  }
+  .stats-table { width:100%; border-collapse:collapse;}
+  .stats-table td, .stats-table th {
+    padding-top: 0.14em;
+    padding-bottom: 0.14em;
+    padding-left: 0.7em;
+    padding-right: 0.7em;
+    text-align:left;
+    font-size:1.1em;
+  }
+  .stats-table th { color:#ffc838; font-weight:700;}
+  .stats-label { color:#b0b8d0;}
+/* Tooltip styles */
+.upg-tooltip, .upgrade-tooltip {
+  position: absolute;
+  z-index: 999;
+  background: #20223a;
+  color: #ffc838;
+  font-size: 0.98em;
+  border-radius: 0.7em;
+  padding: 0.5em 1.1em;
+  box-shadow: 0 2px 24px #0a0a0c33;
+  white-space: pre-line;
+  min-width: 200px;
+  max-width: 350px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.upg-side-row:hover .upg-tooltip,
+.upgrade-card:hover .upgrade-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+}
+.upg-tooltip { left: 90%; top: 60%; transform: translateX(8px) translateY(-40%);}
+.upgrade-tooltip { left: 90%; top: 20%; transform: translateX(8px) translateY(-20%);}
+@media (max-width: 900px) {
+  #main {
+    flex-direction: column;
+    gap: 0.6em;
+    max-width: 99vw;
+    padding: 1.1em 0.2em 2em 0.2em;
+  }
+  #upgrade-sidebar { max-width: 95vw; margin: 0 auto; }
+}
+@media (max-width: 500px) {
+  .tile { width: 38px; height: 38px; font-size: 1.15em;}
+  .kb-key { min-width: 27px; height: 34px; font-size: 1em;}
+  #main-content { padding: 0;}
+}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Rogue Wordle</h1>
+  <div>
+    <span class="stat" id="gold-stat">🪙 5</span>
+  </div>
+</header>
+<div id="main">
+  <div id="main-content">
+    <div id="loading-msg" style="text-align:center;font-size:1.2em;color:#ffc838;">
+      Loading word lists...
+    </div>
+    <div id="menu" style="text-align:center;display:none;">
+      <button class="menu-btn" onclick="beginRun()">Begin Run</button>
+      <button class="menu-btn" onclick="beginEndless()">Endless Mode</button>
+      <button class="menu-btn" onclick="showShop()">Upgrades Shop</button>
+      <button class="menu-btn" onclick="showModifiers()">Modifiers</button>
+      <button class="menu-btn" onclick="showInventory()">Inventory</button>
+      <button class="menu-btn" onclick="showStats()">Stats</button>
+    </div>
+    <div id="game" style="display:none;"></div>
+  </div>
+  <div id="upgrade-sidebar" style="display:none;"></div>
+</div>
+<div id="modal-root"></div>
+<script>
+window._endlessEnterHandler = null;
+const UPGRADE_MAX = [1, 5, 5, 5, 5];
+const UPGRADE_COSTS = [30, 25, 15, 10, 17];
+// Track upgrade uses left for current endless run (reset at start)
+let endlessUpgradeUses = [0, 0, 0, 0, 0];
+
+// Make roundTimer global for endless mode to prevent timer overlap
+let endlessRoundTimer = null;
+const UPGRADE_BASE = [
+  { name: "+1 Guess for all words", desc: "Gain +1 guess each word.", cost: 30,
+    long: "Every word gives one extra guess. Always active once unlocked." },
+  { name: "Super Hint", desc: "Reveal a letter in place for current word.", cost: 25,
+    long: "Use to reveal a letter in the correct position for the current word. Multiple purchases allow multiple uses per word." },
+  { name: "Positive Hint", desc: "Reveal a letter in word.", cost: 15,
+    long: "Use to reveal a letter that exists somewhere in the word. Each purchase adds an extra use per word." },
+  { name: "Negative Hint", desc: "Reveal a letter NOT in word.", cost: 10,
+    long: "Use to reveal a letter that is NOT in the word. Each purchase adds an extra use per word." },
+  { name: "Bonus Guess", desc: "Get an extra guess this word.", cost: 17,
+    long: "Use to get an extra guess for the current word. Each purchase adds an extra use per word." }
+];
+const UPGRADE_TOOLTIPS = UPGRADE_BASE.map(u => u.long);
+let UPGRADES = UPGRADE_BASE.map((u,i)=>({...u, cost:UPGRADE_COSTS[i]}));
+
+const DEFAULT_STATS = {
+  totalGoldEarned: 0,
+  totalWordsSolved: 0,
+  totalWordsAttempted: 0,
+  totalBossesSolved: 0,
+  totalBossesAttempted: 0,
+  totalHintsUsed: [0, 0, 0, 0, 0], // super, pos, neg, bonus, (not used: +1 guess)
+  totalGuesses: 0,
+  runsPlayed: 0,
+  runsCompleted: 0,
+  bestRunWords: 0,
+  bestRunBoss: 0,
+  bestRunGuesses: 0,
+  endlessBestWords: 0
+};
+// Endless mode state
+let isEndless = false;
+// Fix word bleed bug: always clear endlessWordList and endlessWordsSolved on run start
+let endlessWordList = [];
+let endlessWordsSolved = 0;
+function beginEndless() {
+  upgrades = upgradeLevels.map(x=>!!x);
+  isEndless = true;
+  // Always clear endlessWordList and endlessWordsSolved when starting endless mode
+  endlessWordList = [];
+  endlessWordsSolved = 0;
+  // Set upgrade uses for this endless run
+  endlessUpgradeUses = upgradeLevels.slice();
+  // Clear any existing endlessRoundTimer
+  if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+    clearInterval(endlessRoundTimer);
+    endlessRoundTimer = null;
+  }
+  document.getElementById('menu').style.display = "none";
+  document.getElementById('game').style.display = "";
+  document.getElementById('upgrade-sidebar').style.display = "";
+  startEndlessGame();
+}
+
+function quitEndless() {
+  // Close any open modal
+  closeModal();
+  // Remove any lingering enter/keydown handlers
+  if (window._endlessEnterHandler) {
+    document.removeEventListener('keydown', window._endlessEnterHandler);
+    window._endlessEnterHandler = null;
+  }
+  // Stop timer if exists
+  if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+    clearInterval(endlessRoundTimer);
+    endlessRoundTimer = null;
+  }
+  // Hide game UI, show menu
+  document.getElementById('game').style.display = "none";
+  document.getElementById('game').innerHTML = "";
+  document.getElementById('menu').style.display = "";
+  document.getElementById('upgrade-sidebar').style.display = "none";
+  isEndless = false;
+  // Only update best, do NOT award gold here (now handled in summary)
+  if (typeof endlessWordsSolved !== "undefined") {
+    let prevBest = STATS.endlessBestWords || 0;
+    if (endlessWordsSolved > prevBest) {
+      STATS.endlessBestWords = endlessWordsSolved;
+    }
+    updateStats();
+  }
+  player.wordsCompleted = 0;
+  saveAll();
+}
+
+function startEndlessGame() {
+  // Always clear endlessWordList and endlessWordsSolved when starting endless mode
+  endlessWordList = [];
+  endlessWordsSolved = 0;
+  // Clear any existing endlessRoundTimer before starting a new game
+  if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+    clearInterval(endlessRoundTimer);
+    endlessRoundTimer = null;
+  }
+  // Settings
+  let guesses = modifiers[1]?6:7;
+  let boss = modifiers[2];
+  let timerEnabled = modifiers[3];
+  // endlessWordsSolved is now global
+  // Ensure allGuesses is local
+  let allGuesses = [];
+  let wordHintHistory = [];
+  let extraGuesses = upgradeLevels[0]>0?1:0;
+  let bonusGuessThisWord = 0;
+  let msg = "";
+  let showAnswer = false;
+  let timeLeft = 60;
+  let keyboardState = {};
+  const KB_ROWS = [
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L'],
+    ['Z','X','C','V','B','N','M']
+  ];
+  let curWord = 0;
+  let curBossRound = 0;
+  // endlessWordList is global
+  let endlessBossWord = null;
+  let isBossRound = false;
+  // Add flag for endless over status
+  let isEndlessOver = false;
+
+  wordHintHistory[0] = [];
+  // No runsPlayed increment for endless, but you could add if desired
+  saveAll();
+
+  function getIsBossRound() {
+    // Every 5th word is boss if boss enabled, else never
+    return boss && ((endlessWordsSolved+1)%5===0);
+  }
+
+  function nextTargetWord() {
+    isBossRound = getIsBossRound();
+    // If this is a boss round, increment bosses attempted at the start of the round
+    if (isBossRound) {
+      STATS.totalBossesAttempted++;
+      endlessBossWord = randomWord(SEVEN_LETTER_WORDS);
+      endlessWordList.push(endlessBossWord);
+    } else {
+      let w = randomWord(FIVE_LETTER_WORDS);
+      endlessWordList.push(w);
+    }
+    curWord = endlessWordsSolved;
+    wordHintHistory[curWord] = [];
+    // Per-word used upgrades (for sidebar display)
+    let usedThisWord = [0,0,0,0,0];
+    bonusGuessThisWord = 0;
+    showAnswer = false;
+    timeLeft = 60;
+    msg = "";
+    render();
+    startTimer();
+  }
+
+  function render() {
+    let isBoss = getIsBossRound();
+    let len = isBoss?7:5;
+    let target = endlessWordList[curWord];
+    let guessesThis = (allGuesses[curWord]||[]);
+    let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
+    document.getElementById('game').innerHTML = `
+      ${timerEnabled ? `<div class="timer-box"><span id="timer-val">${timeLeft}</span> seconds</div>` : ''}
+      <div style="margin-bottom:1em;">
+        <b>Word ${endlessWordsSolved+1}</b>
+        ${isBoss?'<span style="color:#ffd700;font-weight:bold;">&nbsp;&middot;&nbsp;BOSS</span>':''}
+        &middot; Guesses: <b>${guessesThis.length+1}/${totalGuesses}</b>
+      </div>
+      <div id="tiles"></div>
+      ${wordHintHistory[curWord].length ? `<div class="hint-history"><b>Hints:</b><br>${wordHintHistory[curWord].map(h=>h).join("<br>")}</div>`:""}
+      ${!showAnswer && !isRoundOver() ? `
+        <input type="text" class="guess-input" id="guess-inp" maxlength="${len}" autocomplete="off" placeholder="${len}-letter word">
+        <button class="menu-btn" style="width:100%;" onclick="submitGuessEndless()">Guess</button>
+      ` : ""}
+      <div class="message" id="game-msg">${msg}</div>
+      ${showAnswer ? `
+        <div style="margin:1em 0; color:#ffd700; font-size:1.3em; font-weight:bold;">
+          The correct word was: <span style="color:#fff; letter-spacing:0.15em;">${target.toUpperCase()}</span>
+        </div>
+        <button class="menu-btn" id="next-word-btn" onclick="nextWordEndless()">Next Word</button>
+      ` : ""}
+      <div id="kb-area"></div>
+      <button class="menu-btn" style="background:#353555;margin-top:1.2em;" onclick="quitEndless()">Quit</button>
+    `;
+    let guessRows = guessesThis.map(guess =>
+      tileRowHTML(guess, target)
+    ).join("");
+    document.getElementById('tiles').innerHTML = guessRows;
+    updateKeyboardState(guessesThis, target);
+    document.getElementById('kb-area').innerHTML = KB_ROWS.map(row =>
+      `<div class="kb-row">${row.map(l =>
+        `<span class="kb-key ${keyboardState[l]||'gray'}">${l}</span>`
+      ).join("")}</div>`
+    ).join("");
+    if (timerEnabled && document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
+    if(!showAnswer && !isRoundOver()) {
+      let inp = document.getElementById('guess-inp');
+      inp && inp.focus();
+      inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuessEndless();});
+    }
+    if(showAnswer) {
+// Store a reference so quitEndless() can remove it later
+        if (!window._endlessEnterHandler) window._endlessEnterHandler = handleNextWordEnter;
+          document.addEventListener('keydown', window._endlessEnterHandler, {once:true});       if(document.getElementById('next-word-btn')) {
+        document.getElementById('next-word-btn').focus();
+      }
+    }
+    document.getElementById('upgrade-sidebar').innerHTML = upgradesSidebarHTML();
+    document.getElementById('upgrade-sidebar').style.display = "flex";
+    setSidebarTooltips();
+  }
+
+  function setSidebarTooltips() {
+    // Attach tooltip listeners to sidebar rows
+    let rows = document.querySelectorAll('.upg-side-row');
+    rows.forEach((row, i) => {
+      let idx = Array.from(row.parentNode.children).indexOf(row);
+      if(row.querySelector('.upg-tooltip')) return;
+      let tipDiv = document.createElement('div');
+      tipDiv.className = 'upg-tooltip';
+      tipDiv.innerHTML = UPGRADE_TOOLTIPS[idx]||"";
+      row.appendChild(tipDiv);
+      row.onmouseenter = ()=>{ tipDiv.style.opacity='1'; };
+      row.onmouseleave = ()=>{ tipDiv.style.opacity='0'; };
+    });
+  }
+
+  function handleNextWordEnter(e) {
+    if(e.key === "Enter" && showAnswer) {
+      window.nextWordEndless();
+    } else {
+      // re-register for next
+      document.addEventListener('keydown', handleNextWordEnter, {once:true});
+    }
+  }
+
+  function upgradesSidebarHTML() {
+    let html = `<div class="upg-side-title">Upgrades</div>`;
+    let showAny = false;
+    for(let i=1;i<=4;i++) if(upgradeLevels[i]>0) showAny = true;
+    if(!showAny && upgradeLevels[0]<1) {
+      html += `<div class="upg-side-row" disabled>No upgrades for this run</div>`;
+      return html;
+    }
+    if(upgradeLevels[0]>0) {
+      html += `<div class="upg-side-row">${UPGRADE_BASE[0].name}
+        <span class="upg-used-label">+1 Guess (Always active)</span>
+      </div>`;
+    }
+    for(let i=1;i<=4;i++) {
+      if(upgradeLevels[i]>0) {
+        html += `<div class="upg-side-row">
+          ${UPGRADE_BASE[i].name}
+          <span class="upg-count-label">${endlessUpgradeUses[i]}</span>
+          <button class="upg-use-btn" onclick="useHintInEndless(${i})"
+            ${endlessUpgradeUses[i]<=0||isRoundOver()?'disabled':''}>Use</button>
+        </div>`;
+      }
+    }
+    return html;
+  }
+
+  // Use hints: i = 1 (super), 2 (pos), 3 (neg), 4 (bonus)
+  window.useHintInEndless = function(i) {
+    let isBoss = getIsBossRound();
+    let len = isBoss?7:5;
+    let target = endlessWordList[curWord];
+    let guessesThis = (allGuesses[curWord]||[]);
+    let prevHints = wordHintHistory[curWord]||[];
+    // Use endlessUpgradeUses for availability, and decrement on use
+    if(i>=1 && i<=4 && endlessUpgradeUses[i]>0) {
+      if(i===1) {
+        let revealedPos = new Set();
+        prevHints.forEach(h=>{
+          let m = h.match(/^Super Hint: Letter (\d+)/);
+          if(m) revealedPos.add(+m[1]-1);
+        });
+        guessesThis.forEach(g=>{
+          for(let j=0;j<g.length;j++) if(g[j]===target[j]) revealedPos.add(j);
+        });
+        let unrevealed = [];
+        for(let j=0;j<len;j++) if(!revealedPos.has(j)) unrevealed.push(j);
+        if(unrevealed.length===0) { msg = "No unrevealed letters left!"; render(); return;}
+        let pos = unrevealed[Math.floor(Math.random()*unrevealed.length)];
+        let hint = `Super Hint: Letter ${pos+1} is <b>${target[pos].toUpperCase()}</b>`;
+        (wordHintHistory[curWord]||[]).push(hint);
+        STATS.totalHintsUsed[1]++;
+      }
+      if(i===2) {
+        let already = new Set();
+        prevHints.forEach(h=>{
+          let m = h.match(/^Positive Hint:.*<b>([A-Z])<\/b>/);
+          if(m) already.add(m[1]);
+        });
+        guessesThis.forEach(g=>{for(let ch of g) already.add(ch.toUpperCase());});
+        let unrevealed = [];
+        for(let ch of target.toUpperCase()) if(!already.has(ch)) unrevealed.push(ch);
+        if(unrevealed.length===0) { msg = "No unguessed letters left!"; render(); return;}
+        let hintLetter = unrevealed[Math.floor(Math.random()*unrevealed.length)];
+        let hint = `Positive Hint: The word contains <b>${hintLetter}</b>`;
+        (wordHintHistory[curWord]||[]).push(hint);
+        STATS.totalHintsUsed[2]++;
+      }
+      if(i===3) {
+        let already = new Set();
+        prevHints.forEach(h=>{
+          let m = h.match(/^Negative Hint:.*<b>([A-Z])<\/b>/);
+          if(m) already.add(m[1]);
+        });
+        let notInWord = [];
+        for(let k=0;k<26;k++) {
+          let l = String.fromCharCode(65+k);
+          if(!target.toUpperCase().includes(l) && !already.has(l)) notInWord.push(l);
+        }
+        if(notInWord.length===0) { msg = "No unused negatives left!"; render(); return;}
+        let ltr = notInWord[Math.floor(Math.random()*notInWord.length)];
+        let hint = `Negative Hint: The word does NOT contain <b>${ltr}</b>`;
+        (wordHintHistory[curWord]||[]).push(hint);
+        STATS.totalHintsUsed[3]++;
+      }
+      if(i===4) {
+        bonusGuessThisWord++;
+        let hint = `Bonus Guess: You have an extra guess for this word!`;
+        (wordHintHistory[curWord]||[]).push(hint);
+        STATS.totalHintsUsed[4]++;
+      }
+      endlessUpgradeUses[i]--;
+      msg = "";
+      saveAll();
+      render();
+    }
+  };
+
+  function startTimer() {
+    if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+      clearInterval(endlessRoundTimer);
+      endlessRoundTimer = null;
+    }
+    timeLeft = 60;
+    if (!timerEnabled) return;
+    endlessRoundTimer = setInterval(() => {
+      timeLeft--;
+      if (document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
+      if (timeLeft <= 0) {
+        clearInterval(endlessRoundTimer);
+        endlessRoundTimer = null;
+        showEndOfWord(false);
+      }
+    }, 1000);
+  }
+
+  function submitGuessEndless() {
+    let isBoss = getIsBossRound();
+    let len = isBoss?7:5;
+    let target = endlessWordList[curWord];
+    let val = document.getElementById('guess-inp').value.trim().toLowerCase();
+
+    if(val.length !== len) return showMsg(`Word must be ${len} letters.`);
+    if(isBoss) {
+      if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
+        return showMsg("Invalid word.");
+    } else {
+      if(!FIVE_LETTER_WORDS.includes(val))
+        return showMsg("Invalid word.");
+    }
+
+    allGuesses[curWord]=allGuesses[curWord]||[];
+    allGuesses[curWord].push(val);
+    msg = "";
+    saveAll();
+    render();
+    if(val===target) {
+      if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+        clearInterval(endlessRoundTimer);
+        endlessRoundTimer = null;
+      }
+      setTimeout(()=>{showEndOfWord(true);}, 600);
+      return;
+    }
+    let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
+    if(allGuesses[curWord].length >= totalGuesses) {
+      if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+        clearInterval(endlessRoundTimer);
+        endlessRoundTimer = null;
+      }
+      setTimeout(()=>{showEndOfWord(false);}, 700);
+      return;
+    }
+  }
+  window.submitGuessEndless = submitGuessEndless;
+
+  function isRoundOver() {
+    let isBoss = getIsBossRound();
+    let len = isBoss?7:5;
+    let target = endlessWordList[curWord];
+    let guessesThis = (allGuesses[curWord]||[]);
+    let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
+    if (!guessesThis) return false;
+    if (guessesThis[guessesThis.length-1] === target) return true;
+    if (guessesThis.length >= totalGuesses) return true;
+    if (timerEnabled && timeLeft <= 0) return true;
+    return false;
+  }
+  function showEndOfWord(won) {
+    showAnswer = true;
+    if (won) {
+      endlessWordsSolved++;
+      STATS.totalGuesses += (allGuesses[curWord] || []).length;
+      STATS.totalWordsAttempted++;
+      player.wordsCompleted++;
+      STATS.totalWordsSolved++;
+      // For boss rounds, only increment solved if won and boss round
+      if (won && getIsBossRound()) {
+        STATS.totalBossesSolved++;
+      }
+      saveAll();
+      render();
+      // Wait for nextWordEndless
+    } else {
+      // Game over -- set flag, update stats, and show summary
+      isEndlessOver = true;
+      STATS.totalWordsAttempted += 1;
+      // Bosses attempted is now incremented at round start, so don't double-count here
+      // if(getIsBossRound()) STATS.totalBossesAttempted++;
+      STATS.totalGuesses += (allGuesses[curWord]||[]).length;
+      let prevBest = STATS.endlessBestWords||0;
+      if(endlessWordsSolved > prevBest) {
+        STATS.endlessBestWords = endlessWordsSolved;
+      }
+      saveAll();
+      updateStats();
+      // Move gold reward and modal to showEndlessSummary
+      showEndlessSummary(allGuesses, boss);
+
+      document.getElementById('game').style.display="none";
+      document.getElementById('menu').style.display="";
+      document.getElementById('upgrade-sidebar').style.display = "none";
+      isEndless = false;
+      saveAll();
+    }
+  }
+
+  // Show endless summary and award gold
+  function showEndlessSummary(allGuesses, boss) {
+    allGuesses = [];
+    let prevBest = STATS.endlessBestWords||0;
+    let goldEarned = endlessWordsSolved * 4;
+    player.gold += goldEarned;
+    STATS.totalGoldEarned += goldEarned;
+    updateStats();
+    showModal(`
+      <h2 style="font-size:2em;color:#ffd700;">Endless Run Over!</h2>
+      <div style="font-size:1.2em;color:#25b365;margin:0.8em 0;">
+        Words solved: <b>${endlessWordsSolved}</b><br>
+        Gold earned: <b>${goldEarned}</b><br>
+        ${endlessWordsSolved > prevBest ? `<span style="color:#ffd700;">New Best!</span><br>`:""}
+      </div>
+      <div style="margin-bottom:1em;">${allGuesses.map((g,i)=>
+        `<div style="margin-bottom:.3em;font-size:1.06em;">
+        ${g && (boss && ((i+1)%5===0) ? "Boss: " : "")}${g && g[g.length-1]===endlessWordList[i]?"✔️":"❌"} ${endlessWordList[i]}</div>`).join("")}
+      </div>
+      <button class="menu-btn" onclick="closeModal();quitEndless()">Continue</button>
+    `);
+  }
+  window.nextWordEndless = function() {
+    // Only called if previous word was solved
+    showAnswer = false;
+    curWord++;
+    bonusGuessThisWord = 0;
+    msg = "";
+    wordHintHistory[curWord] = [];
+    nextTargetWord();
+  };
+
+  function updateKeyboardState(guessesArr, target) {
+    let best = {};
+    guessesArr.forEach(guess => {
+      let g = getTileColors(guess, target);
+      for(let i=0;i<guess.length;i++) {
+        let l = guess[i].toUpperCase();
+        let v = (g[i]==="green")?2:(g[i]==="yellow")?1:0;
+        best[l] = Math.max(best[l]||0, v);
+      }
+    });
+    KB_ROWS.flat().forEach(l => {
+      if(best[l]===2) keyboardState[l] = "green";
+      else if(best[l]===1) keyboardState[l] = "yellow";
+      else if(best[l]===0) keyboardState[l] = "dark";
+      else keyboardState[l] = "gray";
+    });
+  }
+
+  function showMsg(t) {msg=t; document.getElementById('game-msg').textContent=t;}
+
+  // Start first word
+  endlessWordList = [];
+  nextTargetWord();
+}
+let STATS = JSON.parse(localStorage.getItem("wordrun_stats") || JSON.stringify(DEFAULT_STATS));
+let upgradeLevels = JSON.parse(localStorage.getItem("wordrun_upgradeLevels") || "[0,0,0,0,0]");
+let player = JSON.parse(localStorage.getItem("wordrun_player") || JSON.stringify({ gold: 5, wordsCompleted: 0 }));
+
+function saveAll() {
+  localStorage.setItem("wordrun_stats", JSON.stringify(STATS));
+  localStorage.setItem("wordrun_upgradeLevels", JSON.stringify(upgradeLevels));
+  localStorage.setItem("wordrun_player", JSON.stringify(player));
+}
+function resetStatsAndGold(confirmFirst=true) {
+  if(confirmFirst && !confirm("Reset all statistics, gold, and upgrades? This cannot be undone.")) return;
+  STATS = JSON.parse(JSON.stringify(DEFAULT_STATS));
+  upgradeLevels = [0,0,0,0,0];
+  player = { gold: 5, wordsCompleted: 0 };
+  saveAll();
+  updateStats();
+  closeModal();
+  alert("All stats, gold, and upgrades have been reset.");
+  location.reload();
+}
+
+let FIVE_LETTER_WORDS = [], SEVEN_LETTER_WORDS = [], SEVEN_LETTER_GUESS_WORDS = [];
+let upgrades = [false, false, false, false, false];
+let modifiers = [false,false,false,false];
+
+updateStats();
+
+Promise.all([
+  fetch('fiveLetterWords.txt').then(r=>r.text()),
+  fetch('sevenLetterWords.txt').then(r=>r.text()),
+  fetch('sevenLetterWordsGuess.txt').then(r=>r.text())
+]).then(([five, seven, sevenGuess])=>{
+  FIVE_LETTER_WORDS = five.split('\n').map(w=>w.trim().toLowerCase()).filter(w=>w.length===5 && !w.includes(' '));
+  SEVEN_LETTER_WORDS = seven.split('\n').map(w=>w.trim().toLowerCase()).filter(w=>w.length===7 && !w.includes(' '));
+  SEVEN_LETTER_GUESS_WORDS = sevenGuess.split('\n').map(w=>w.trim().toLowerCase()).filter(w=>w.length===7 && !w.includes(' '));
+  if(FIVE_LETTER_WORDS.length < 10 || SEVEN_LETTER_WORDS.length < 2 || SEVEN_LETTER_GUESS_WORDS.length < 2) {
+    document.getElementById("loading-msg").textContent = "Word files loaded, but not enough words! (Check your .txt files)";
+    return;
+  }
+  document.getElementById("loading-msg").style.display="none";
+  document.getElementById("menu").style.display="";
+}).catch(()=>{
+  document.getElementById("loading-msg").textContent = "Error loading word files!";
+});
+
+function beginRun() {
+  isEndless = false;
+  // Detach any lingering Endless enter handler (extra safety)
+  if (window._endlessEnterHandler) {
+    document.removeEventListener('keydown', window._endlessEnterHandler);
+    window._endlessEnterHandler = null;
+  }
+  upgrades = upgradeLevels.map(x=>!!x);
+  const inp = document.getElementById('guess-inp');
+  if (inp) inp.onkeyup = null;
+  // Ensure all endless mode variables are reset before regular run
+  endlessWordList = [];
+  
+  endlessWordsSolved = 0;
+  endlessUpgradeUses = [0, 0, 0, 0, 0];
+  document.getElementById('menu').style.display = "none";
+  document.getElementById('game').style.display = "";
+  document.getElementById('upgrade-sidebar').style.display = "";
+  startGame();
+}
+function showShop() {
+  showModal(`
+    <h2>Upgrades Shop</h2>
+    ${UPGRADE_BASE.map((u,i)=>`
+      <div class="upgrade-card" onmouseenter="showUpgradeTooltip(event,${i})" onmouseleave="hideUpgradeTooltip(event)">
+        <span class="upgrade-name">${u.name}
+          <span class="upgrade-cost">(${u.cost} gold)</span>
+          ${UPGRADE_MAX[i]>1?`<span class="upg-count-label">${upgradeLevels[i]}/${UPGRADE_MAX[i]}</span>`:""}
+        </span>
+        <button class="upgrade-btn" onclick="purchaseUpgrade(${i})"
+          ${upgradeLevels[i]>=UPGRADE_MAX[i]||player.gold<u.cost?'disabled':''}>
+          ${upgradeLevels[i]>=UPGRADE_MAX[i] ? "Maxed" : player.gold < u.cost ? "Not enough gold" : "Upgrade"}
+        </button>
+        <div class="upgrade-tooltip" style="opacity:0;">${UPGRADE_TOOLTIPS[i]}</div>
+      </div>
+    `).join("")}
+    <button class="menu-btn" onclick="closeModal()">Close</button>
+  `);
+}
+window.showUpgradeTooltip = function(e, idx) {
+  let tip = e.currentTarget.querySelector('.upgrade-tooltip');
+  if(tip) tip.style.opacity = '1';
+};
+window.hideUpgradeTooltip = function(e) {
+  let tip = e.currentTarget.querySelector('.upgrade-tooltip');
+  if(tip) tip.style.opacity = '0';
+};
+function purchaseUpgrade(idx) {
+  if(player.gold >= UPGRADE_COSTS[idx] && upgradeLevels[idx] < UPGRADE_MAX[idx]) {
+    player.gold -= UPGRADE_COSTS[idx];
+    upgradeLevels[idx]++;
+    saveAll();
+    updateStats();
+    showShop();
+  }
+}
+function showInventory() {
+  showModal(`
+    <h2>Inventory</h2>
+    <ul class="inventory-list">
+      ${UPGRADE_BASE.map((u,i)=>
+        upgradeLevels[i]>0
+          ? `<li class="inventory-item">${u.name} ${UPGRADE_MAX[i]>1?`<span class="upg-count-label">${upgradeLevels[i]}/${UPGRADE_MAX[i]}</span>`:""}</li>`
+          : ""
+        ).join('') || "<li class='inventory-item'>No upgrades owned</li>"}
+    </ul>
+    <button class="menu-btn" onclick="closeModal()">Close</button>
+  `);
+}
+function showStats() {
+  let avgGuesses = STATS.totalWordsSolved ? (STATS.totalGuesses / STATS.totalWordsSolved).toFixed(2) : "—";
+  let avgHintsPerWord = STATS.totalWordsSolved ? (
+    STATS.totalHintsUsed.reduce((a,b)=>a+b,0) / STATS.totalWordsSolved
+  ).toFixed(2) : "—";
+  showModal(`
+    <h2 class="stats-title">Player Statistics</h2>
+    <div>
+      <div class="stats-group">
+        <table class="stats-table">
+          <tr><th colspan="2">General</th></tr>
+          <tr><td class="stats-label">Total Gold Earned</td><td>${STATS.totalGoldEarned}</td></tr>
+          <tr><td class="stats-label">Runs Played</td><td>${STATS.runsPlayed}</td></tr>
+          <tr><td class="stats-label">Runs Completed</td><td>${STATS.runsCompleted}</td></tr>
+          <tr><td class="stats-label">Best Endless Run (Words)</td><td>${STATS.endlessBestWords||0}</td></tr>
+          <tr><td class="stats-label">Best Run (Least Guesses)</td><td>${STATS.bestRunGuesses||"—"}</td></tr>
+        </table>
+      </div>
+      <div class="stats-group">
+        <table class="stats-table">
+          <tr><th colspan="2">Words & Bosses</th></tr>
+          <tr><td class="stats-label">Words Solved</td><td>${STATS.totalWordsSolved}</td></tr>
+          <tr><td class="stats-label">Words Attempted</td><td>${STATS.totalWordsAttempted}</td></tr>
+          <tr><td class="stats-label">Bosses Solved</td><td>${STATS.totalBossesSolved}</td></tr>
+          <tr><td class="stats-label">Bosses Attempted</td><td>${STATS.totalBossesAttempted}</td></tr>
+        </table>
+      </div>
+      <div class="stats-group">
+        <table class="stats-table">
+          <tr><th colspan="2">Hints Used</th></tr>
+          <tr><td class="stats-label">Super Hints Used</td><td>${STATS.totalHintsUsed[1]}</td></tr>
+          <tr><td class="stats-label">Positive Hints Used</td><td>${STATS.totalHintsUsed[2]}</td></tr>
+          <tr><td class="stats-label">Negative Hints Used</td><td>${STATS.totalHintsUsed[3]}</td></tr>
+          <tr><td class="stats-label">Bonus Guesses Used</td><td>${STATS.totalHintsUsed[4]}</td></tr>
+          <tr><td class="stats-label">Hints per Solved Word (avg)</td><td>${avgHintsPerWord}</td></tr>
+        </table>
+      </div>
+      <div class="stats-group">
+        <table class="stats-table">
+          <tr><th colspan="2">Guesses</th></tr>
+          <tr><td class="stats-label">Total Guesses</td><td>${STATS.totalGuesses}</td></tr>
+          <tr><td class="stats-label">Guesses per Solved Word (avg)</td><td>${avgGuesses}</td></tr>
+        </table>
+      </div>
+    </div>
+    <button class="menu-btn" onclick="closeModal()">Close</button>
+    <button class="menu-btn" style="background:#e05454;color:#fff;margin-left:2em;" onclick="resetStatsAndGold()">Reset All</button>
+  `);
+}
+function toggleModifier(idx) {
+  modifiers[idx]=!modifiers[idx];
+  showModifiers();
+}
+function showModifiers() {
+  showModal(`
+    <h2>Difficulty Modifiers</h2>
+    ${[
+      { name: "Word count +1", desc: "6 words" },
+      { name: "Guesses -1", desc: "6 guesses" },
+      { name: "Boss round", desc: "7-letter boss" },
+      { name: "Timer", desc: "60s per word" }
+    ].map((m,i) => `
+      <div class="modifier-card">
+        <span class="modifier-name">${m.name} <span style="color:#7ee">${m.desc}</span></span>
+        <button class="modifier-btn" onclick="toggleModifier(${i})">${modifiers[i]?"Enabled":"Enable"}</button>
+      </div>
+    `).join("")}
+    <button class="menu-btn" onclick="closeModal()">Close</button>
+  `);
+}
+function showModal(html) { document.getElementById("modal-root").innerHTML = `<div class="modal-bg"><div class="modal-panel">${html}</div></div>`; }
+function closeModal() { document.getElementById("modal-root").innerHTML=""; }
+
+function startGame() {
+  // Clear endlessWordList and endlessWordsSolved to prevent bleed from endless mode
+  endlessWordList = [];
+  endlessWordsSolved = 0;
+  let words = modifiers[0]?6:5;
+  let guesses = modifiers[1]?6:7;
+  let boss = modifiers[2];
+  let timerEnabled = modifiers[3];
+  let curWord = 0, correct=0, bossSolved=0;
+  let allGuesses = [];
+  let hintUses = [0, 0, 0, 0, 0]; // counts used this run
+  let wordHintHistory = []; // array of arrays (one per word)
+  let extraGuesses = upgradeLevels[0]>0?1:0;
+  let bonusGuessThisWord = 0;
+  let wordList = [];
+  for(let i=0; i<words; ++i)
+    wordList.push(randomWord(FIVE_LETTER_WORDS));
+  let bossWord = boss ? randomWord(SEVEN_LETTER_WORDS) : null;
+  let msg = "";
+  let showAnswer = false;
+  let roundTimer = null;
+  let timeLeft = 60;
+  let keyboardState = {};
+  const KB_ROWS = [
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L'],
+    ['Z','X','C','V','B','N','M']
+  ];
+
+  wordHintHistory[0] = [];
+  STATS.runsPlayed += 1;
+  saveAll();
+
+  function render() {
+    let isBoss = boss && curWord === words;
+    let len = isBoss?7:5;
+    let target = isBoss?bossWord:wordList[curWord];
+    let guessesThis = (allGuesses[curWord]||[]);
+    let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
+    document.getElementById('game').innerHTML = `
+      ${timerEnabled ? `<div class="timer-box"><span id="timer-val">${timeLeft}</span> seconds</div>` : ''}
+      <div style="margin-bottom:1em;">
+        <b>Word ${curWord+1}/${words + (boss?1:0)}</b> 
+        &middot; Guesses: <b>${guessesThis.length}/${totalGuesses}</b>
+      </div>
+      <div id="tiles"></div>
+      ${wordHintHistory[curWord].length ? `<div class="hint-history"><b>Hints:</b><br>${wordHintHistory[curWord].map(h=>h).join("<br>")}</div>`:""}
+      ${!showAnswer && !isRoundOver() ? `
+        <input type="text" class="guess-input" id="guess-inp" maxlength="${len}" autocomplete="off" placeholder="${len}-letter word">
+        <button class="menu-btn" style="width:100%;" onclick="submitGuess()">Guess</button>
+      ` : ""}
+      <div class="message" id="game-msg">${msg}</div>
+      ${showAnswer ? `
+        <div style="margin:1em 0; color:#ffd700; font-size:1.3em; font-weight:bold;">
+          The correct word was: <span style="color:#fff; letter-spacing:0.15em;">${target.toUpperCase()}</span>
+        </div>
+        <button class="menu-btn" id="next-word-btn" onclick="nextWord()">Next Word</button>
+      ` : ""}
+      <div id="kb-area"></div>
+      <button class="menu-btn" style="background:#353555;margin-top:1.2em;" onclick="quitRun()">Quit</button>
+    `;
+    let guessRows = guessesThis.map(guess =>
+      tileRowHTML(guess, target)
+    ).join("");
+    document.getElementById('tiles').innerHTML = guessRows;
+    updateKeyboardState(guessesThis, target);
+    document.getElementById('kb-area').innerHTML = KB_ROWS.map(row =>
+      `<div class="kb-row">${row.map(l =>
+        `<span class="kb-key ${keyboardState[l]||'gray'}">${l}</span>`
+      ).join("")}</div>`
+    ).join("");
+    if (timerEnabled && document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
+    if(!showAnswer && !isRoundOver()) {
+      let inp = document.getElementById('guess-inp');
+      inp && inp.focus();
+      inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuess();});
+    }
+    if(showAnswer) {
+      // Use the saved reference so we can remove it later
+// Remember this handler so quitEndless() can detach it later
+  document.addEventListener('keydown', handleNextWordEnter, {once:true});   
+  if(document.getElementById('next-word-btn')) {
+      document.getElementById('next-word-btn').focus();
+    }
+    }
+    document.getElementById('upgrade-sidebar').innerHTML = upgradesSidebarHTML();
+    document.getElementById('upgrade-sidebar').style.display = "flex";
+    setSidebarTooltips();
+  }
+
+  function setSidebarTooltips() {
+    // Attach tooltip listeners to sidebar rows
+    let rows = document.querySelectorAll('.upg-side-row');
+    rows.forEach((row, i) => {
+      let idx = Array.from(row.parentNode.children).indexOf(row);
+      if(row.querySelector('.upg-tooltip')) return;
+      let tipDiv = document.createElement('div');
+      tipDiv.className = 'upg-tooltip';
+      tipDiv.innerHTML = UPGRADE_TOOLTIPS[idx]||"";
+      row.appendChild(tipDiv);
+      row.onmouseenter = ()=>{ tipDiv.style.opacity='1'; };
+      row.onmouseleave = ()=>{ tipDiv.style.opacity='0'; };
+    });
+  }
+
+  function handleNextWordEnter(e) {
+    if(e.key === "Enter" && showAnswer) {
+      window.nextWord();
+    } else {
+      // re-register for next
+      document.addEventListener('keydown', handleNextWordEnter, {once:true});
+    }
+  }
+
+  function upgradesSidebarHTML() {
+    let html = `<div class="upg-side-title">Upgrades</div>`;
+    let showAny = false;
+    for(let i=1;i<=4;i++) if(upgradeLevels[i]>0) showAny = true;
+    if(!showAny && upgradeLevels[0]<1) {
+      html += `<div class="upg-side-row" disabled>No upgrades for this run</div>`;
+      return html;
+    }
+    if(upgradeLevels[0]>0) {
+      html += `<div class="upg-side-row">${UPGRADE_BASE[0].name}
+        <span class="upg-used-label">+1 Guess (Always active)</span>
+      </div>`;
+    }
+    for(let i=1;i<=4;i++) {
+      if(upgradeLevels[i]>0) {
+        html += `<div class="upg-side-row">
+          ${UPGRADE_BASE[i].name}
+          <span class="upg-count-label">${upgradeLevels[i]-hintUses[i]}</span>
+          <button class="upg-use-btn" onclick="useHintInRun(${i})"
+            ${hintUses[i]>=upgradeLevels[i]||isRoundOver()?'disabled':''}>Use</button>
+        </div>`;
+      }
+    }
+    return html;
+  }
+
+  // Use hints: i = 1 (super), 2 (pos), 3 (neg), 4 (bonus)
+  window.useHintInRun = function(i) {
+    let isBoss = boss && curWord === words;
+    let len = isBoss?7:5;
+    let target = isBoss?bossWord:wordList[curWord];
+    let guessesThis = (allGuesses[curWord]||[]);
+    let prevHints = wordHintHistory[curWord]||[];
+    if(i===1 && hintUses[1]<upgradeLevels[1]) {
+      let revealedPos = new Set();
+      prevHints.forEach(h=>{
+        let m = h.match(/^Super Hint: Letter (\d+)/);
+        if(m) revealedPos.add(+m[1]-1);
+      });
+      guessesThis.forEach(g=>{
+        for(let j=0;j<g.length;j++) if(g[j]===target[j]) revealedPos.add(j);
+      });
+      let unrevealed = [];
+      for(let j=0;j<len;j++) if(!revealedPos.has(j)) unrevealed.push(j);
+      if(unrevealed.length===0) { msg = "No unrevealed letters left!"; render(); return;}
+      let pos = unrevealed[Math.floor(Math.random()*unrevealed.length)];
+      let hint = `Super Hint: Letter ${pos+1} is <b>${target[pos].toUpperCase()}</b>`;
+      (wordHintHistory[curWord]||[]).push(hint);
+      hintUses[1]++; STATS.totalHintsUsed[1]++;
+    }
+    if(i===2 && hintUses[2]<upgradeLevels[2]) {
+      let already = new Set();
+      prevHints.forEach(h=>{
+        let m = h.match(/^Positive Hint:.*<b>([A-Z])<\/b>/);
+        if(m) already.add(m[1]);
+      });
+      guessesThis.forEach(g=>{for(let ch of g) already.add(ch.toUpperCase());});
+      let unrevealed = [];
+      for(let ch of target.toUpperCase()) if(!already.has(ch)) unrevealed.push(ch);
+      if(unrevealed.length===0) { msg = "No unguessed letters left!"; render(); return;}
+      let hintLetter = unrevealed[Math.floor(Math.random()*unrevealed.length)];
+      let hint = `Positive Hint: The word contains <b>${hintLetter}</b>`;
+      (wordHintHistory[curWord]||[]).push(hint);
+      hintUses[2]++; STATS.totalHintsUsed[2]++;
+    }
+    if(i===3 && hintUses[3]<upgradeLevels[3]) {
+      let already = new Set();
+      prevHints.forEach(h=>{
+        let m = h.match(/^Negative Hint:.*<b>([A-Z])<\/b>/);
+        if(m) already.add(m[1]);
+      });
+      let notInWord = [];
+      for(let k=0;k<26;k++) {
+        let l = String.fromCharCode(65+k);
+        if(!target.toUpperCase().includes(l) && !already.has(l)) notInWord.push(l);
+      }
+      if(notInWord.length===0) { msg = "No unused negatives left!"; render(); return;}
+      let ltr = notInWord[Math.floor(Math.random()*notInWord.length)];
+      let hint = `Negative Hint: The word does NOT contain <b>${ltr}</b>`;
+      (wordHintHistory[curWord]||[]).push(hint);
+      hintUses[3]++; STATS.totalHintsUsed[3]++;
+    }
+    if(i===4 && hintUses[4]<upgradeLevels[4]) {
+      bonusGuessThisWord++;
+      let hint = `Bonus Guess: You have an extra guess for this word!`;
+      (wordHintHistory[curWord]||[]).push(hint);
+      hintUses[4]++; STATS.totalHintsUsed[4]++;
+    }
+    msg = "";
+    saveAll();
+    render();
+  };
+
+  function startTimer() {
+    clearInterval(roundTimer);
+    timeLeft = 60;
+    if (!timerEnabled) return;
+    roundTimer = setInterval(() => {
+      timeLeft--;
+      if (document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
+      if (timeLeft <= 0) {
+        clearInterval(roundTimer);
+        showEndOfWord();
+      }
+    }, 1000);
+  }
+
+  function submitGuess() {
+    let isBoss = boss && curWord === words;
+    let len = isBoss?7:5;
+    let target = isBoss?bossWord:wordList[curWord];
+    let val = document.getElementById('guess-inp').value.trim().toLowerCase();
+
+    if(val.length !== len) return showMsg(`Word must be ${len} letters.`);
+    if(isBoss) {
+      if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
+        return showMsg("Invalid word.");
+    } else {
+      if(!FIVE_LETTER_WORDS.includes(val))
+        return showMsg("Invalid word.");
+    }
+
+    allGuesses[curWord]=allGuesses[curWord]||[];
+    allGuesses[curWord].push(val);
+    msg = "";
+    saveAll();
+    render();
+    if(val===target) {
+      clearInterval(roundTimer);
+      setTimeout(()=>{showEndOfWord(true);}, 600);
+      return;
+    }
+    let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
+    if(allGuesses[curWord].length >= totalGuesses) {
+      clearInterval(roundTimer);
+      setTimeout(()=>{showEndOfWord(false);}, 700);
+      return;
+    }
+  }
+  window.submitGuess = submitGuess;
+
+  function isRoundOver() {
+    let isBoss = boss && curWord === words;
+    let len = isBoss?7:5;
+    let target = isBoss?bossWord:wordList[curWord];
+    let guessesThis = (allGuesses[curWord]||[]);
+    let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
+    if (!guessesThis) return false;
+    if (guessesThis[guessesThis.length-1] === target) return true;
+    if (guessesThis.length >= totalGuesses) return true;
+    if (timerEnabled && timeLeft <= 0) return true;
+    return false;
+  }
+  function showEndOfWord(won) {
+    showAnswer = true;
+    if (won) {
+      correct++; player.wordsCompleted++;
+      STATS.totalWordsSolved++;
+      if(boss && curWord===words) {
+        bossSolved++;
+        STATS.totalBossesSolved++;
+      }
+    }
+    // Always attempted
+    STATS.totalWordsAttempted++;
+    if(boss && curWord===words) STATS.totalBossesAttempted++;
+    // Guesses
+    let guessesThis = (allGuesses[curWord]||[]);
+    STATS.totalGuesses += guessesThis.length;
+    saveAll();
+    render();
+  }
+  window.nextWord = function() {
+    showAnswer = false;
+    timeLeft = 60;
+    curWord++;
+    bonusGuessThisWord = 0;
+    msg = "";
+    wordHintHistory[curWord] = [];
+    if(boss && curWord===words+1 || !boss && curWord===words) {
+      clearInterval(roundTimer);
+      document.getElementById('upgrade-sidebar').style.display = "none";
+      showSummary();
+      return;
+    }
+    render();
+    startTimer();
+  };
+
+  function updateKeyboardState(guessesArr, target) {
+    let best = {};
+    guessesArr.forEach(guess => {
+      let g = getTileColors(guess, target);
+      for(let i=0;i<guess.length;i++) {
+        let l = guess[i].toUpperCase();
+        let v = (g[i]==="green")?2:(g[i]==="yellow")?1:0;
+        best[l] = Math.max(best[l]||0, v);
+      }
+    });
+    KB_ROWS.flat().forEach(l => {
+      if(best[l]===2) keyboardState[l] = "green";
+      else if(best[l]===1) keyboardState[l] = "yellow";
+      else if(best[l]===0) keyboardState[l] = "dark";
+      else keyboardState[l] = "gray";
+    });
+  }
+
+  function showMsg(t) {msg=t; document.getElementById('game-msg').textContent=t;}
+window.quitRun = function() {
+    clearInterval(roundTimer);
+    document.getElementById('game').style.display="none";
+    document.getElementById('game').innerHTML = "";
+    document.getElementById('menu').style.display="";
+    document.getElementById('upgrade-sidebar').style.display = "none";
+    isEndless = false;
+    saveAll();
+  }
+  function showSummary() {
+    let goldEarned = correct*4;
+    player.gold+=goldEarned;
+    STATS.totalGoldEarned += goldEarned;
+    if(correct>STATS.bestRunWords) STATS.bestRunWords=correct;
+    if(bossSolved>STATS.bestRunBoss) STATS.bestRunBoss=bossSolved;
+    let guessesUsed = allGuesses.flat().length;
+    if(STATS.bestRunGuesses==0||guessesUsed<STATS.bestRunGuesses) STATS.bestRunGuesses=guessesUsed;
+    STATS.runsCompleted += 1;
+    saveAll();
+    updateStats();
+    showModal(`
+      <h2 style="font-size:2em;color:#ffd700;">Run Complete!</h2>
+      <div style="font-size:1.2em;color:#25b365;margin:0.8em 0;">
+        Words solved: <b>${correct}</b> / ${words + (boss?1:0)}<br>
+        Gold earned: <b>${goldEarned}</b>
+      </div>
+      <div style="margin-bottom:1em;">${allGuesses.map((g,i)=>
+        `<div style="margin-bottom:.3em;font-size:1.06em;">
+        ${g && (boss && i===words ? "Boss: " : "")}${g && g[g.length-1]===((boss&&i===words)?bossWord:wordList[i])?"✔️":"❌"} ${(boss&&i===words)?bossWord:wordList[i]}</div>`).join("")}
+      </div>
+      <button class="menu-btn" onclick="closeModal();quitRun()">Continue</button>
+    `);
+    document.getElementById('game').style.display="none";
+    document.getElementById('menu').style.display="";
+    document.getElementById('upgrade-sidebar').style.display = "none";
+    saveAll();
+  }
+  render();
+  startTimer();
+}
+function tileRowHTML(guess, target) {
+  const colors = getTileColors(guess, target);
+  return `<div class="tile-row">${[...guess].map((ch,i)=>
+    `<span class="tile ${colors[i]}">${ch}</span>`
+  ).join("")}</div>`;
+}
+function getTileColors(guess, target) {
+  const colors = Array(target.length).fill("gray"), used={};
+  for(let i=0;i<guess.length;i++) {
+    if(guess[i]===target[i]) { colors[i]="green"; used[i]=true;}
+  }
+  for(let i=0;i<guess.length;i++) {
+    if(colors[i]!=="green") {
+      const idx = [...target].findIndex((ch,j)=>
+        ch===guess[i] && !used[j] && guess[j]!==target[j]
+      );
+      if(idx!==-1) { colors[i]="yellow"; used[idx]=true;}
+    }
+  }
+  return colors;
+}
+function randomWord(list) { return list[Math.floor(Math.random()*list.length)]; }
+function updateStats() {
+  document.getElementById('gold-stat').textContent = "🪙 " + player.gold;
+  saveAll();
+}
+document.addEventListener("keydown", function(e){
+      if(e.key === "Escape") closeModal();
+    });
+</script>
+</body>
+</html>
