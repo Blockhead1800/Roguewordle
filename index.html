@@ -385,10 +385,11 @@ hr { border: none; border-top: 1.5px solid #323255; margin: 1.5em 0;}
 <div id="modal-root"></div>
 <script>
 window._endlessEnterHandler = null;
-const UPGRADE_MAX = [1, 5, 5, 5, 5];
-const UPGRADE_COSTS = [30, 25, 15, 10, 17];
+// EXTRA LIFE: Add 6th upgrade for extra life in endless mode
+const UPGRADE_MAX = [1, 5, 5, 5, 5, 2]; // EXTRA LIFE
+const UPGRADE_COSTS = [30, 25, 15, 10, 17, 40]; // EXTRA LIFE
 // Track upgrade uses left for current endless run (reset at start)
-let endlessUpgradeUses = [0, 0, 0, 0, 0];
+let endlessUpgradeUses = [0, 0, 0, 0, 0, 0]; // EXTRA LIFE
 
 // Make roundTimer global for endless mode to prevent timer overlap
 let endlessRoundTimer = null;
@@ -402,7 +403,10 @@ const UPGRADE_BASE = [
   { name: "Negative Hint", desc: "Reveal a letter NOT in word.", cost: 10,
     long: "Use to reveal a letter that is NOT in the word. Each purchase adds an extra use per word." },
   { name: "Bonus Guess", desc: "Get an extra guess this word.", cost: 17,
-    long: "Use to get an extra guess for the current word. Each purchase adds an extra use per word." }
+    long: "Use to get an extra guess for the current word. Each purchase adds an extra use per word." },
+  // EXTRA LIFE
+  { name: "Extra Life (endless only)", desc: "Continue if you get a word wrong in endless.", cost: 40,
+    long: "Lets you continue the endless run if you get a word wrong. Can be used twice per run if owned. Only works in endless mode." }
 ];
 const UPGRADE_TOOLTIPS = UPGRADE_BASE.map(u => u.long);
 let UPGRADES = UPGRADE_BASE.map((u,i)=>({...u, cost:UPGRADE_COSTS[i]}));
@@ -413,7 +417,7 @@ const DEFAULT_STATS = {
   totalWordsAttempted: 0,
   totalBossesSolved: 0,
   totalBossesAttempted: 0,
-  totalHintsUsed: [0, 0, 0, 0, 0], // super, pos, neg, bonus, not used: +1 guess
+  totalHintsUsed: [0, 0, 0, 0, 0, 0], // super, pos, neg, bonus, not used: +1 guess, [5]=extra life (unused for stats, but keep length 6)
   totalGuesses: 0,
   runsPlayed: 0,
   runsCompleted: 0,
@@ -427,6 +431,8 @@ let isEndless = false;
 // Fix word bleed bug: always clear endlessWordList and endlessWordsSolved on run start
 let endlessWordList = [];
 let endlessWordsSolved = 0;
+// EXTRA LIFE: Track extra lives left for current endless run
+let endlessExtraLives = 0; // EXTRA LIFE
 function beginEndless() {
   upgrades = upgradeLevels.map(x=>!!x);
   isEndless = true;
@@ -435,6 +441,8 @@ function beginEndless() {
   endlessWordsSolved = 0;
   // Set upgrade uses for this endless run
   endlessUpgradeUses = upgradeLevels.slice();
+  // EXTRA LIFE: Set endlessExtraLives at run start
+  endlessExtraLives = upgradeLevels[5] || 0; // EXTRA LIFE
   // Clear any existing endlessRoundTimer
   if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
     clearInterval(endlessRoundTimer);
@@ -486,6 +494,8 @@ function startEndlessGame() {
     clearInterval(endlessRoundTimer);
     endlessRoundTimer = null;
   }
+  // EXTRA LIFE: Initialize endlessExtraLives from upgradeLevels[5]
+  endlessExtraLives = upgradeLevels[5] || 0; // EXTRA LIFE
   // Settings
   let guesses = modifiers[1]?6:7;
   let boss = modifiers[2];
@@ -536,7 +546,7 @@ function startEndlessGame() {
     curWord = endlessWordsSolved;
     wordHintHistory[curWord] = [];
     // Per-word used upgrades (for sidebar display)
-    let usedThisWord = [0,0,0,0,0];
+    let usedThisWord = [0,0,0,0,0,0]; // EXTRA LIFE
     bonusGuessThisWord = 0;
     showAnswer = false;
     timeLeft = 60;
@@ -630,7 +640,7 @@ function startEndlessGame() {
     let html = `<div class="upg-side-title">Upgrades</div>`;
     let showAny = false;
     for(let i=1;i<=4;i++) if(upgradeLevels[i]>0) showAny = true;
-    if(!showAny && upgradeLevels[0]<1) {
+    if(!showAny && upgradeLevels[0]<1 && (!upgradeLevels[5] || upgradeLevels[5]<1)) {
       html += `<div class="upg-side-row" disabled>No upgrades for this run</div>`;
       return html;
     }
@@ -648,6 +658,13 @@ function startEndlessGame() {
             ${endlessUpgradeUses[i]<=0||isRoundOver()?'disabled':''}>Use</button>
         </div>`;
       }
+    }
+    // EXTRA LIFE: Show extra lives left in endless sidebar if >0
+    if (upgradeLevels[5] > 0 && endlessExtraLives > 0) {
+      html += `<div class="upg-side-row">
+        ${UPGRADE_BASE[5].name}
+        <span class="upg-count-label">${endlessExtraLives}</span>
+      </div>`;
     }
     return html;
   }
@@ -794,6 +811,32 @@ function startEndlessGame() {
     return false;
   }
   function showEndOfWord(won) {
+    // EXTRA LIFE: If failed and endlessExtraLives > 0, consume and retry same word
+    if (!won && endlessExtraLives > 0) {
+      // Consume an extra life
+      endlessExtraLives--;
+      // Show a temporary message/modal
+      showModal(`
+        <div style="font-size:1.5em;color:#ffd700;margin-bottom:1em;">Extra Life used!</div>
+        <div style="margin-bottom:1.2em;">You get another try at this word.<br>Extra Lives left: <b>${endlessExtraLives}</b></div>
+        <button class="menu-btn" onclick="closeModal();window._retryEndlessWord && window._retryEndlessWord();">Continue</button>
+      `);
+      // Provide a function to retry the word after modal closes
+      window._retryEndlessWord = function() {
+        // Reset guesses, hints, timer, etc for current word, but do NOT increment stats or curWord
+        allGuesses[curWord] = [];
+        wordHintHistory[curWord] = [];
+        bonusGuessThisWord = 0;
+        showAnswer = false;
+        msg = "";
+        timeLeft = 60;
+        // Restart timer
+        startTimer();
+        render();
+        window._retryEndlessWord = null;
+      };
+      return;
+    }
     showAnswer = true;
     if (won) {
       endlessWordsSolved++;
@@ -889,11 +932,35 @@ function startEndlessGame() {
   endlessWordList = [];
   nextTargetWord();
 }
-let STATS = JSON.parse(localStorage.getItem("wordrun_stats") || JSON.stringify(DEFAULT_STATS));
-let upgradeLevels = JSON.parse(localStorage.getItem("wordrun_upgradeLevels") || "[0,0,0,0,0]");
+// EXTRA LIFE: Ensure stats and upgrades arrays are correct length (6)
+let STATS = (() => {
+  let s = JSON.parse(localStorage.getItem("wordrun_stats") || JSON.stringify(DEFAULT_STATS));
+  if (!Array.isArray(s.totalHintsUsed) || s.totalHintsUsed.length < 6) {
+    s.totalHintsUsed = (s.totalHintsUsed||[]).slice(0,6);
+    while (s.totalHintsUsed.length < 6) s.totalHintsUsed.push(0);
+  }
+  return s;
+})();
+let upgradeLevels = (() => {
+  let arr = JSON.parse(localStorage.getItem("wordrun_upgradeLevels") || "[0,0,0,0,0,0]");
+  if (!Array.isArray(arr) || arr.length < 6) {
+    arr = arr.slice(0,6);
+    while (arr.length < 6) arr.push(0);
+  }
+  return arr;
+})();
 let player = JSON.parse(localStorage.getItem("wordrun_player") || JSON.stringify({ gold: 5, wordsCompleted: 0 }));
 
 function saveAll() {
+  // EXTRA LIFE: Ensure arrays are always length 6 for stats/upgrades
+  if (Array.isArray(STATS.totalHintsUsed)) {
+    STATS.totalHintsUsed = STATS.totalHintsUsed.slice(0,6);
+    while (STATS.totalHintsUsed.length < 6) STATS.totalHintsUsed.push(0);
+  }
+  if (Array.isArray(upgradeLevels)) {
+    upgradeLevels = upgradeLevels.slice(0,6);
+    while (upgradeLevels.length < 6) upgradeLevels.push(0);
+  }
   localStorage.setItem("wordrun_stats", JSON.stringify(STATS));
   localStorage.setItem("wordrun_upgradeLevels", JSON.stringify(upgradeLevels));
   localStorage.setItem("wordrun_player", JSON.stringify(player));
@@ -901,7 +968,7 @@ function saveAll() {
 function resetStatsAndGold(confirmFirst=true) {
   if(confirmFirst && !confirm("Reset all statistics, gold, and upgrades? This cannot be undone.")) return;
   STATS = JSON.parse(JSON.stringify(DEFAULT_STATS));
-  upgradeLevels = [0,0,0,0,0];
+  upgradeLevels = [0,0,0,0,0,0]; // EXTRA LIFE
   player = { gold: 5, wordsCompleted: 0 };
   saveAll();
   updateStats();
@@ -1005,8 +1072,10 @@ function showInventory() {
 }
 function showStats() {
   let avgGuesses = STATS.totalWordsSolved ? (STATS.totalGuesses / STATS.totalWordsSolved).toFixed(2) : "—";
+  // Only count hints (not extra life) for hints per word
+  let hintsUsedSum = STATS.totalHintsUsed.slice(1,5).reduce((a,b)=>a+b,0);
   let avgHintsPerWord = STATS.totalWordsSolved ? (
-    STATS.totalHintsUsed.reduce((a,b)=>a+b,0) / STATS.totalWordsSolved
+    hintsUsedSum / STATS.totalWordsSolved
   ).toFixed(2) : "—";
   showModal(`
     <h2 class="stats-title">Player Statistics</h2>
