@@ -386,10 +386,10 @@ hr { border: none; border-top: 1.5px solid #323255; margin: 1.5em 0;}
 <script>
 window._endlessEnterHandler = null;
 // EXTRA LIFE: Add 6th upgrade for extra life in endless mode
-const UPGRADE_MAX = [1, 5, 5, 5, 5, 2]; // EXTRA LIFE
-const UPGRADE_COSTS = [30, 25, 15, 10, 17, 40]; // EXTRA LIFE
+const UPGRADE_MAX = [1, 5, 5, 5, 5, 2, 3]; // EXTRA LIFE, Added Word Reroll (index 6)
+const UPGRADE_COSTS = [30, 25, 15, 10, 17, 40, 25]; // EXTRA LIFE, Added Word Reroll cost
 // Track upgrade uses left for current endless run (reset at start)
-let endlessUpgradeUses = [0, 0, 0, 0, 0, 0]; // EXTRA LIFE
+let endlessUpgradeUses = [0, 0, 0, 0, 0, 0, 0]; // EXTRA LIFE, Added slot for reroll
 
 // Make roundTimer global for endless mode to prevent timer overlap
 let endlessRoundTimer = null;
@@ -406,7 +406,10 @@ const UPGRADE_BASE = [
     long: "Use to get an extra guess for the current word. Each purchase adds an extra use per word." },
   // EXTRA LIFE
   { name: "Extra Life (endless only)", desc: "Continue if you get a word wrong in endless.", cost: 40,
-    long: "Lets you continue the endless run if you get a word wrong. Can be used twice per run if owned. Only works in endless mode." }
+    long: "Lets you continue the endless run if you get a word wrong. Can be used twice per run if owned. Only works in endless mode." },
+  // WORD REROLL
+  { name: "Word Reroll", desc: "Reroll the current word.", cost: 25,
+    long: "Use to reroll the current word. Resets your guesses and timer for this word, but does NOT restore used hints. You can buy up to 3 per run. (Does not increase words solved or affect stats.)" }
 ];
 const UPGRADE_TOOLTIPS = UPGRADE_BASE.map(u => u.long);
 let UPGRADES = UPGRADE_BASE.map((u,i)=>({...u, cost:UPGRADE_COSTS[i]}));
@@ -417,7 +420,7 @@ const DEFAULT_STATS = {
   totalWordsAttempted: 0,
   totalBossesSolved: 0,
   totalBossesAttempted: 0,
-  totalHintsUsed: [0, 0, 0, 0, 0, 0], // super, pos, neg, bonus, not used: +1 guess, [5]=extra life (unused for stats, but keep length 6)
+  totalHintsUsed: [0, 0, 0, 0, 0, 0, 0], // super, pos, neg, bonus, not used: +1 guess, [5]=extra life (unused for stats, but keep length 7)
   totalGuesses: 0,
   runsPlayed: 0,
   runsCompleted: 0,
@@ -546,7 +549,7 @@ function startEndlessGame() {
     curWord = endlessWordsSolved;
     wordHintHistory[curWord] = [];
     // Per-word used upgrades (for sidebar display)
-    let usedThisWord = [0,0,0,0,0,0]; // EXTRA LIFE
+    let usedThisWord = [0,0,0,0,0,0,0]; // EXTRA LIFE, Added slot for reroll
     bonusGuessThisWord = 0;
     showAnswer = false;
     timeLeft = 60;
@@ -640,7 +643,7 @@ function startEndlessGame() {
     let html = `<div class="upg-side-title">Upgrades</div>`;
     let showAny = false;
     for(let i=1;i<=4;i++) if(upgradeLevels[i]>0) showAny = true;
-    if(!showAny && upgradeLevels[0]<1 && (!upgradeLevels[5] || upgradeLevels[5]<1)) {
+    if(!showAny && upgradeLevels[0]<1 && (!upgradeLevels[5] || upgradeLevels[5]<1) && (!upgradeLevels[6] || upgradeLevels[6]<1)) {
       html += `<div class="upg-side-row" disabled>No upgrades for this run</div>`;
       return html;
     }
@@ -658,6 +661,14 @@ function startEndlessGame() {
             ${endlessUpgradeUses[i]<=0||isRoundOver()?'disabled':''}>Use</button>
         </div>`;
       }
+    }
+    // WORD REROLL: Show reroll button if owned and uses left (move above extra life)
+    if (upgradeLevels[6] > 0 && endlessUpgradeUses[6] > 0) {
+      html += `<div class="upg-side-row">
+        ${UPGRADE_BASE[6].name}
+        <span class="upg-count-label">${endlessUpgradeUses[6]}</span>
+        <button class="upg-use-btn" onclick="rerollCurrentWordEndless()" ${isRoundOver()?'disabled':''}>Reroll</button>
+      </div>`;
     }
     // EXTRA LIFE: Show extra lives left in endless sidebar if >0
     if (upgradeLevels[5] > 0 && endlessExtraLives > 0) {
@@ -813,8 +824,8 @@ function startEndlessGame() {
   function showEndOfWord(won) {
     // EXTRA LIFE: If failed and endlessExtraLives > 0, consume and retry same word
     if (!won && endlessExtraLives > 0) {
-      // Consume an extra life
       endlessExtraLives--;
+      STATS.totalHintsUsed[5]++; // Track extra life use
       // Show a temporary message/modal
       showModal(`
         <div style="font-size:1.5em;color:#ffd700;margin-bottom:1em;">Extra Life used!</div>
@@ -931,35 +942,57 @@ function startEndlessGame() {
   // Start first word
   endlessWordList = [];
   nextTargetWord();
+
+  // Move rerollCurrentWordEndless here so it closes over allGuesses, curWord, etc.
+  window.rerollCurrentWordEndless = function() {
+    if (upgradeLevels[6] > 0 && endlessUpgradeUses[6] > 0 && !isRoundOver()) {
+      endlessUpgradeUses[6]--;
+      STATS.totalHintsUsed[6]++; // Track reroll use
+      // Remove current word and generate a new one (same type)
+      let isBoss = getIsBossRound();
+      let len = isBoss ? 7 : 5;
+      let newWord = isBoss ? randomWord(SEVEN_LETTER_WORDS) : randomWord(FIVE_LETTER_WORDS);
+      endlessWordList[curWord] = newWord;
+      // Reset guesses and timer for this word, but keep hints used
+      allGuesses[curWord] = [];
+      bonusGuessThisWord = 0;
+      msg = "";
+      timeLeft = 60;
+      // Do NOT reset wordHintHistory[curWord]
+      startTimer();
+      render();
+      saveAll();
+    }
+  };
 }
-// EXTRA LIFE: Ensure stats and upgrades arrays are correct length (6)
+// EXTRA LIFE: Ensure stats and upgrades arrays are correct length (7)
 let STATS = (() => {
   let s = JSON.parse(localStorage.getItem("wordrun_stats") || JSON.stringify(DEFAULT_STATS));
-  if (!Array.isArray(s.totalHintsUsed) || s.totalHintsUsed.length < 6) {
-    s.totalHintsUsed = (s.totalHintsUsed||[]).slice(0,6);
-    while (s.totalHintsUsed.length < 6) s.totalHintsUsed.push(0);
+  if (!Array.isArray(s.totalHintsUsed) || s.totalHintsUsed.length < 7) {
+    s.totalHintsUsed = (s.totalHintsUsed||[]).slice(0,7);
+    while (s.totalHintsUsed.length < 7) s.totalHintsUsed.push(0);
   }
   return s;
 })();
 let upgradeLevels = (() => {
-  let arr = JSON.parse(localStorage.getItem("wordrun_upgradeLevels") || "[0,0,0,0,0,0]");
-  if (!Array.isArray(arr) || arr.length < 6) {
-    arr = arr.slice(0,6);
-    while (arr.length < 6) arr.push(0);
+  let arr = JSON.parse(localStorage.getItem("wordrun_upgradeLevels") || "[0,0,0,0,0,0,0]");
+  if (!Array.isArray(arr) || arr.length < 7) {
+    arr = arr.slice(0,7);
+    while (arr.length < 7) arr.push(0);
   }
   return arr;
 })();
 let player = JSON.parse(localStorage.getItem("wordrun_player") || JSON.stringify({ gold: 5, wordsCompleted: 0 }));
 
 function saveAll() {
-  // EXTRA LIFE: Ensure arrays are always length 6 for stats/upgrades
+  // Ensure arrays are always length 7 for stats/upgrades
   if (Array.isArray(STATS.totalHintsUsed)) {
-    STATS.totalHintsUsed = STATS.totalHintsUsed.slice(0,6);
-    while (STATS.totalHintsUsed.length < 6) STATS.totalHintsUsed.push(0);
+    STATS.totalHintsUsed = STATS.totalHintsUsed.slice(0,7);
+    while (STATS.totalHintsUsed.length < 7) STATS.totalHintsUsed.push(0);
   }
   if (Array.isArray(upgradeLevels)) {
-    upgradeLevels = upgradeLevels.slice(0,6);
-    while (upgradeLevels.length < 6) upgradeLevels.push(0);
+    upgradeLevels = upgradeLevels.slice(0,7);
+    while (upgradeLevels.length < 7) upgradeLevels.push(0);
   }
   localStorage.setItem("wordrun_stats", JSON.stringify(STATS));
   localStorage.setItem("wordrun_upgradeLevels", JSON.stringify(upgradeLevels));
@@ -968,7 +1001,7 @@ function saveAll() {
 function resetStatsAndGold(confirmFirst=true) {
   if(confirmFirst && !confirm("Reset all statistics, gold, and upgrades? This cannot be undone.")) return;
   STATS = JSON.parse(JSON.stringify(DEFAULT_STATS));
-  upgradeLevels = [0,0,0,0,0,0]; // EXTRA LIFE
+  upgradeLevels = [0,0,0,0,0,0,0]; // EXTRA LIFE, Added slot for reroll
   player = { gold: 5, wordsCompleted: 0 };
   saveAll();
   updateStats();
@@ -1015,7 +1048,7 @@ function beginRun() {
   endlessWordList = [];
   
   endlessWordsSolved = 0;
-  endlessUpgradeUses = [0, 0, 0, 0, 0];
+  endlessUpgradeUses = [0, 0, 0, 0, 0, 0, 0]; // EXTRA LIFE, Added slot for reroll
   document.getElementById('menu').style.display = "none";
   document.getElementById('game').style.display = "";
   document.getElementById('upgrade-sidebar').style.display = "";
@@ -1106,6 +1139,8 @@ function showStats() {
           <tr><td class="stats-label">Positive Hints Used</td><td>${STATS.totalHintsUsed[2]}</td></tr>
           <tr><td class="stats-label">Negative Hints Used</td><td>${STATS.totalHintsUsed[3]}</td></tr>
           <tr><td class="stats-label">Bonus Guesses Used</td><td>${STATS.totalHintsUsed[4]}</td></tr>
+          <tr><td class="stats-label">Word Rerolls Used</td><td>${STATS.totalHintsUsed[6]}</td></tr>
+          <tr><td class="stats-label">Extra Lives Used</td><td>${STATS.totalHintsUsed[5]}</td></tr>
           <tr><td class="stats-label">Hints per Solved Word (avg)</td><td>${avgHintsPerWord}</td></tr>
         </table>
       </div>
@@ -1155,7 +1190,8 @@ function startGame() {
   let timerEnabled = modifiers[3];
   let curWord = 0, correct=0, bossSolved=0;
   let allGuesses = [];
-  let hintUses = [0, 0, 0, 0, 0]; // counts used this run
+  let hintUses = [0, 0, 0, 0, 0, 0, 0]; // counts used this run
+  let rerollUses = 0; // Track reroll uses for this run
   let wordHintHistory = []; // array of arrays (one per word)
   let extraGuesses = upgradeLevels[0]>0?1:0;
   let bonusGuessThisWord = 0;
@@ -1177,6 +1213,58 @@ function startGame() {
   wordHintHistory[0] = [];
   STATS.runsPlayed += 1;
   saveAll();
+
+  function upgradesSidebarHTML() {
+    let html = `<div class="upg-side-title">Upgrades</div>`;
+    let showAny = false;
+    for(let i=1;i<=4;i++) if(upgradeLevels[i]>0) showAny = true;
+    if(!showAny && upgradeLevels[0]<1 && (!upgradeLevels[5] || upgradeLevels[5]<1) && (!upgradeLevels[6] || upgradeLevels[6]<1)) {
+      html += `<div class="upg-side-row" disabled>No upgrades for this run</div>`;
+      return html;
+    }
+    if(upgradeLevels[0]>0) {
+      html += `<div class="upg-side-row">${UPGRADE_BASE[0].name}
+        <span class="upg-used-label">+1 Guess (Always active)</span>
+      </div>`;
+    }
+    for(let i=1;i<=4;i++) {
+      if(upgradeLevels[i]>0) {
+        html += `<div class="upg-side-row">
+          ${UPGRADE_BASE[i].name}
+          <span class="upg-count-label">${upgradeLevels[i]-hintUses[i]}</span>
+          <button class="upg-use-btn" onclick="useHintInRun(${i})"
+            ${hintUses[i]>=upgradeLevels[i]||isRoundOver()?'disabled':''}>Use</button>
+        </div>`;
+      }
+    }
+    // WORD REROLL: Show reroll button if owned and uses left
+    if (upgradeLevels[6] > 0 && (upgradeLevels[6] - rerollUses) > 0) {
+      html += `<div class="upg-side-row">
+        ${UPGRADE_BASE[6].name}
+        <span class="upg-count-label">${upgradeLevels[6] - rerollUses}</span>
+        <button class="upg-use-btn" onclick="rerollCurrentWordRun()" ${isRoundOver()?'disabled':''}>Reroll</button>
+      </div>`;
+    }
+    return html;
+  }
+  window.rerollCurrentWordRun = function() {
+    if (upgradeLevels[6] > 0 && (upgradeLevels[6] - rerollUses) > 0 && !isRoundOver()) {
+      rerollUses++;
+      STATS.totalHintsUsed[6]++; // Track reroll use
+      let isBoss = boss && curWord === words;
+      let len = isBoss ? 7 : 5;
+      let newWord = isBoss ? randomWord(SEVEN_LETTER_WORDS) : randomWord(FIVE_LETTER_WORDS);
+      if (isBoss) bossWord = newWord; else wordList[curWord] = newWord;
+      allGuesses[curWord] = [];
+      bonusGuessThisWord = 0;
+      msg = "";
+      timeLeft = 60;
+      // Do NOT reset wordHintHistory[curWord]
+      startTimer();
+      render();
+      saveAll();
+    }
+  };
 
   function render() {
     let isBoss = boss && curWord === words;
@@ -1257,32 +1345,6 @@ function startGame() {
       // re-register for next
       document.addEventListener('keydown', handleNextWordEnter, {once:true});
     }
-  }
-
-  function upgradesSidebarHTML() {
-    let html = `<div class="upg-side-title">Upgrades</div>`;
-    let showAny = false;
-    for(let i=1;i<=4;i++) if(upgradeLevels[i]>0) showAny = true;
-    if(!showAny && upgradeLevels[0]<1) {
-      html += `<div class="upg-side-row" disabled>No upgrades for this run</div>`;
-      return html;
-    }
-    if(upgradeLevels[0]>0) {
-      html += `<div class="upg-side-row">${UPGRADE_BASE[0].name}
-        <span class="upg-used-label">+1 Guess (Always active)</span>
-      </div>`;
-    }
-    for(let i=1;i<=4;i++) {
-      if(upgradeLevels[i]>0) {
-        html += `<div class="upg-side-row">
-          ${UPGRADE_BASE[i].name}
-          <span class="upg-count-label">${upgradeLevels[i]-hintUses[i]}</span>
-          <button class="upg-use-btn" onclick="useHintInRun(${i})"
-            ${hintUses[i]>=upgradeLevels[i]||isRoundOver()?'disabled':''}>Use</button>
-        </div>`;
-      }
-    }
-    return html;
   }
 
   // Use hints: i = 1 (super), 2 (pos), 3 (neg), 4 (bonus)
@@ -1536,6 +1598,27 @@ function updateStats() {
 document.addEventListener("keydown", function(e){
       if(e.key === "Escape") closeModal();
     });
+// Add reroll function for endless mode
+window.rerollCurrentWordEndless = function() {
+  if (upgradeLevels[6] > 0 && endlessUpgradeUses[6] > 0 && !isRoundOver()) {
+    endlessUpgradeUses[6]--;
+    STATS.totalHintsUsed[6]++; // Track reroll use
+    // Remove current word and generate a new one (same type)
+    let isBoss = getIsBossRound();
+    let len = isBoss ? 7 : 5;
+    let newWord = isBoss ? randomWord(SEVEN_LETTER_WORDS) : randomWord(FIVE_LETTER_WORDS);
+    endlessWordList[curWord] = newWord;
+    // Reset guesses and timer for this word, but keep hints used
+    allGuesses[curWord] = [];
+    bonusGuessThisWord = 0;
+    msg = "";
+    timeLeft = 60;
+    // Do NOT reset wordHintHistory[curWord]
+    startTimer();
+    render();
+    saveAll();
+  }
+};
 </script>
 </body>
 </html>
