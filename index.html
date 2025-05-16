@@ -556,7 +556,7 @@ function startEndlessGame() {
       <div style="margin-bottom:1em;">
         <b>Word ${endlessWordsSolved+1}</b>
         ${isBoss?'<span style="color:#ffd700;font-weight:bold;">&nbsp;&middot;&nbsp;BOSS</span>':''}
-        &middot; Guesses: <b>${guessesThis.length+1}/${totalGuesses}</b>
+        &middot; Guesses: <b>${guessesThis.length}/${totalGuesses}</b>
       </div>
       <div id="tiles"></div>
       ${wordHintHistory[curWord].length ? `<div class="hint-history"><b>Hints:</b><br>${wordHintHistory[curWord].map(h=>h).join("<br>")}</div>`:""}
@@ -843,6 +843,7 @@ function startEndlessGame() {
     showModal(`
       <h2 style="font-size:2em;color:#ffd700;">Endless Run Over!</h2>
       <div style="font-size:1.2em;color:#25b365;margin:0.8em 0;">
+        Word gotten wrong: <b>${endlessWordList[curWord]}</b><br>
         Words solved: <b>${endlessWordsSolved}</b><br>
         Gold earned: <b>${goldEarned}</b><br>
         ${endlessWordsSolved > prevBest ? `<span style="color:#ffd700;">New Best!</span><br>`:""}
