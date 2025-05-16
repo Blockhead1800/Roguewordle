@@ -565,6 +565,7 @@ function startEndlessGame() {
     let guessesThis = (allGuesses[curWord]||[]);
     let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
     document.getElementById('game').innerHTML = `
+      ${isBoss ? `<div style="font-size:2.2em;font-weight:900;color:#ffd700;text-align:center;margin-bottom:0.2em;letter-spacing:0.08em;">BOSS WORD</div>` : ''}
       ${timerEnabled ? `<div class="timer-box"><span id="timer-val">${timeLeft}</span> seconds</div>` : ''}
       <div style="margin-bottom:1em;">
         <b>Word ${endlessWordsSolved+1}</b>
@@ -1273,6 +1274,7 @@ function startGame() {
     let guessesThis = (allGuesses[curWord]||[]);
     let totalGuesses = guesses + extraGuesses + bonusGuessThisWord;
     document.getElementById('game').innerHTML = `
+      ${isBoss ? `<div style="font-size:2.2em;font-weight:900;color:#ffd700;text-align:center;margin-bottom:0.2em;letter-spacing:0.08em;">BOSS WORD</div>` : ''}
       ${timerEnabled ? `<div class="timer-box"><span id="timer-val">${timeLeft}</span> seconds</div>` : ''}
       <div style="margin-bottom:1em;">
         <b>Word ${curWord+1}/${words + (boss?1:0)}</b> 
