@@ -785,8 +785,7 @@ function startEndlessGame() {
       if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
         return showMsg("Invalid word.");
     } else {
-      let wordSource = isEasyMode ? FIVE_LETTER_GUESS_WORDS : FIVE_LETTER_WORDS;
-      if(!wordSource.includes(val))
+      if(!FIVE_LETTER_WORDS.includes(val))
         return showMsg("Invalid word.");
     }
 
@@ -1449,8 +1448,7 @@ function startGame() {
       if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
         return showMsg("Invalid word.");
     } else {
-      let wordSource = isEasyMode ? FIVE_LETTER_GUESS_WORDS : FIVE_LETTER_WORDS;
-      if(!wordSource.includes(val))
+      if(!FIVE_LETTER_WORDS.includes(val))
         return showMsg("Invalid word.");
     }
 
