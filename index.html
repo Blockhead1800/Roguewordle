@@ -546,7 +546,8 @@ function startEndlessGame() {
       endlessBossWord = randomWord(SEVEN_LETTER_WORDS);
       endlessWordList.push(endlessBossWord);
     } else {
-      let w = randomWord(FIVE_LETTER_WORDS);
+      let wordSource = isEasyMode ? FIVE_LETTER_GUESS_WORDS : FIVE_LETTER_WORDS;
+      let w = randomWord(wordSource);
       endlessWordList.push(w);
     }
     curWord = endlessWordsSolved;
@@ -784,7 +785,8 @@ function startEndlessGame() {
       if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
         return showMsg("Invalid word.");
     } else {
-      if(!FIVE_LETTER_WORDS.includes(val))
+      let wordSource = isEasyMode ? FIVE_LETTER_GUESS_WORDS : FIVE_LETTER_WORDS;
+      if(!wordSource.includes(val))
         return showMsg("Invalid word.");
     }
 
@@ -1014,7 +1016,7 @@ function resetStatsAndGold(confirmFirst=true) {
   location.reload();
 }
 
-let FIVE_LETTER_WORDS = [], SEVEN_LETTER_WORDS = [], SEVEN_LETTER_GUESS_WORDS = [];
+let FIVE_LETTER_WORDS = [], FIVE_LETTER_GUESS_WORDS = [], SEVEN_LETTER_WORDS = [], SEVEN_LETTER_GUESS_WORDS = [];
 let upgrades = [false, false, false, false, false];
 let modifiers = [false,false,false,false];
 
@@ -1022,18 +1024,21 @@ updateStats();
 
 Promise.all([
   fetch('fiveLetterWords.txt').then(r=>r.text()),
+  fetch('fiveLetterWordsGuess.txt').then(r=>r.text()),
   fetch('sevenLetterWords.txt').then(r=>r.text()),
   fetch('sevenLetterWordsGuess.txt').then(r=>r.text())
-]).then(([five, seven, sevenGuess])=>{
+]).then(([five, fiveGuess, seven, sevenGuess])=>{
   FIVE_LETTER_WORDS = five.split('\n').map(w=>w.trim().toLowerCase()).filter(w=>w.length===5 && !w.includes(' '));
+  FIVE_LETTER_GUESS_WORDS = fiveGuess.split('\n').map(w=>w.trim().toLowerCase()).filter(w=>w.length===5 && !w.includes(' '));
   SEVEN_LETTER_WORDS = seven.split('\n').map(w=>w.trim().toLowerCase()).filter(w=>w.length===7 && !w.includes(' '));
   SEVEN_LETTER_GUESS_WORDS = sevenGuess.split('\n').map(w=>w.trim().toLowerCase()).filter(w=>w.length===7 && !w.includes(' '));
-  if(FIVE_LETTER_WORDS.length < 10 || SEVEN_LETTER_WORDS.length < 2 || SEVEN_LETTER_GUESS_WORDS.length < 2) {
+  if(FIVE_LETTER_WORDS.length < 10 || FIVE_LETTER_GUESS_WORDS.length < 10 || SEVEN_LETTER_WORDS.length < 2 || SEVEN_LETTER_GUESS_WORDS.length < 2) {
     document.getElementById("loading-msg").textContent = "Word files loaded, but not enough words! (Check your .txt files)";
     return;
   }
   document.getElementById("loading-msg").style.display="none";
   document.getElementById("menu").style.display="";
+  document.getElementById("mode-toggle-row").style.display = "block";
 }).catch(()=>{
   document.getElementById("loading-msg").textContent = "Error loading word files!";
 });
@@ -1053,9 +1058,8 @@ function beginRun() {
   
   endlessWordsSolved = 0;
   endlessUpgradeUses = [0, 0, 0, 0, 0, 0, 0]; // EXTRA LIFE, Added slot for reroll
-  document.getElementById('menu').style.display = "none";
-  document.getElementById('game').style.display = "";
-  document.getElementById('upgrade-sidebar').style.display = "";
+  hideMenu();
+  showGame();
   startGame();
 }
 function showShop() {
@@ -1200,8 +1204,9 @@ function startGame() {
   let extraGuesses = upgradeLevels[0]>0?1:0;
   let bonusGuessThisWord = 0;
   let wordList = [];
+  let wordSource = isEasyMode ? FIVE_LETTER_GUESS_WORDS : FIVE_LETTER_WORDS;
   for(let i=0; i<words; ++i)
-    wordList.push(randomWord(FIVE_LETTER_WORDS));
+    wordList.push(randomWord(wordSource));
   let bossWord = boss ? randomWord(SEVEN_LETTER_WORDS) : null;
   let msg = "";
   let showAnswer = false;
@@ -1444,7 +1449,8 @@ function startGame() {
       if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
         return showMsg("Invalid word.");
     } else {
-      if(!FIVE_LETTER_WORDS.includes(val))
+      let wordSource = isEasyMode ? FIVE_LETTER_GUESS_WORDS : FIVE_LETTER_WORDS;
+      if(!wordSource.includes(val))
         return showMsg("Invalid word.");
     }
 
@@ -1536,11 +1542,8 @@ function startGame() {
   function showMsg(t) {msg=t; document.getElementById('game-msg').textContent=t;}
 window.quitRun = function() {
     clearInterval(roundTimer);
-    document.getElementById('game').style.display="none";
-    document.getElementById('game').innerHTML = "";
-    document.getElementById('menu').style.display="";
-    document.getElementById('upgrade-sidebar').style.display = "none";
-    isEndless = false;
+    hideGame();
+    showMenu();
     saveAll();
   }
   function showSummary() {
@@ -1566,6 +1569,14 @@ window.quitRun = function() {
       </div>
       <button class="menu-btn" onclick="closeModal();quitRun()">Continue</button>
     `);
+    // Add event listener for Enter key
+    document.addEventListener('keydown', function handleSummaryEnter(e) {
+      if (e.key === 'Enter') {
+        document.removeEventListener('keydown', handleSummaryEnter);
+        closeModal();
+        quitRun();
+      }
+    });
     document.getElementById('game').style.display="none";
     document.getElementById('menu').style.display="";
     document.getElementById('upgrade-sidebar').style.display = "none";
@@ -1624,6 +1635,134 @@ window.rerollCurrentWordEndless = function() {
     saveAll();
   }
 };
+
+// Add easy/hard mode toggle state
+let isEasyMode = true;
+
+function updateModeToggleUI() {
+  const btn = document.getElementById('mode-toggle-btn');
+  if (btn) {
+    btn.textContent = isEasyMode ? 'Easy Mode' : 'Hard Mode';
+    btn.setAttribute('aria-label', isEasyMode ? 'Easy Mode: Common words only' : 'Hard Mode: All valid five-letter words');
+  }
+}
+
+function toggleMode() {
+  isEasyMode = !isEasyMode;
+  updateModeToggleUI();
+}
+
+// Insert the toggle into the menu area
+const menuDiv = document.getElementById('menu');
+const modeToggleRow = document.createElement('div');
+modeToggleRow.id = 'mode-toggle-row';
+modeToggleRow.style = 'display:none;text-align:center;margin-bottom:1.1em;position:relative;';
+modeToggleRow.innerHTML = `
+  <button id="mode-toggle-btn" class="menu-btn" style="margin-bottom:0.2em;min-width:140px;position:relative;"
+    onmouseenter="showModeTooltip()"
+    onmouseleave="hideModeTooltip()"
+    onclick="toggleMode()">
+    Easy Mode
+  </button>
+  <span id="mode-toggle-tooltip" style="opacity:0;position:absolute;left:50%;transform:translateX(-50%);background:#20223a;color:#ffc838;font-size:0.98em;border-radius:0.7em;padding:0.5em 1.1em;box-shadow:0 2px 24px #0a0a0c33;white-space:pre-line;min-width:220px;max-width:350px;z-index:999;top:110%;pointer-events:none;transition:opacity 0.15s;">
+    <b>Easy Mode:</b> Only common five-letter words are used.\n<b>Hard Mode:</b> Any valid five-letter word may appear, including rare or obscure words.
+  </span>
+`;
+menuDiv.parentNode.insertBefore(modeToggleRow, menuDiv);
+updateModeToggleUI();
+
+// Tooltip show/hide functions
+window.showModeTooltip = function() {
+  document.getElementById('mode-toggle-tooltip').style.opacity = '1';
+};
+window.hideModeTooltip = function() {
+  document.getElementById('mode-toggle-tooltip').style.opacity = '0';
+};
+
+// Show/hide toggle row based on menu/game visibility
+function showMenu() {
+  document.getElementById('menu').style.display = '';
+  document.getElementById('mode-toggle-row').style.display = 'block';
+}
+function hideMenu() {
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('mode-toggle-row').style.display = 'none';
+}
+function showGame() {
+  document.getElementById('game').style.display = '';
+  document.getElementById('upgrade-sidebar').style.display = '';
+  document.getElementById('mode-toggle-row').style.display = 'none';
+}
+function hideGame() {
+  document.getElementById('game').style.display = 'none';
+  document.getElementById('upgrade-sidebar').style.display = 'none';
+}
+// Patch all menu/game transitions to use these
+// In beginRun and beginEndless, hide menu and show game
+function beginRun() {
+  isEndless = false;
+  if (window._endlessEnterHandler) {
+    document.removeEventListener('keydown', window._endlessEnterHandler);
+    window._endlessEnterHandler = null;
+  }
+  upgrades = upgradeLevels.map(x=>!!x);
+  const inp = document.getElementById('guess-inp');
+  if (inp) inp.onkeyup = null;
+  endlessWordList = [];
+  endlessWordsSolved = 0;
+  endlessUpgradeUses = [0, 0, 0, 0, 0, 0, 0];
+  hideMenu();
+  showGame();
+  startGame();
+}
+function beginEndless() {
+  upgrades = upgradeLevels.map(x=>!!x);
+  isEndless = true;
+  endlessWordList = [];
+  endlessWordsSolved = 0;
+  endlessUpgradeUses = upgradeLevels.slice();
+  endlessExtraLives = upgradeLevels[5] || 0;
+  if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+    clearInterval(endlessRoundTimer);
+    endlessRoundTimer = null;
+  }
+  hideMenu();
+  showGame();
+  startEndlessGame();
+}
+// In quitRun and quitEndless, hide game and show menu
+window.quitRun = function() {
+  clearInterval(roundTimer);
+  hideGame();
+  showMenu();
+  saveAll();
+}
+function quitEndless() {
+  closeModal();
+  if (window._endlessEnterHandler) {
+    document.removeEventListener('keydown', window._endlessEnterHandler);
+    window._endlessEnterHandler = null;
+  }
+  if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
+    clearInterval(endlessRoundTimer);
+    endlessRoundTimer = null;
+  }
+  hideGame();
+  showMenu();
+  isEndless = false;
+  if (typeof endlessWordsSolved !== "undefined") {
+    let prevBest = STATS.endlessBestWords || 0;
+    if (endlessWordsSolved > prevBest) {
+      STATS.endlessBestWords = endlessWordsSolved;
+    }
+    updateStats();
+  }
+  player.wordsCompleted = 0;
+  saveAll();
+}
+// On initial load, show menu and hide game/toggle
+hideGame();
+showMenu();
 </script>
 </body>
 </html>
