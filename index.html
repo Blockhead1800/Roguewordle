@@ -492,6 +492,7 @@ function quitEndless() {
 }
 
 function startEndlessGame() {
+  let boss_killed = 0;
   // Always clear endlessWordList and endlessWordsSolved when starting endless mode
   endlessWordList = [];
   endlessWordsSolved = 0;
@@ -863,6 +864,7 @@ function startEndlessGame() {
       // For boss rounds, only increment solved if won and boss round
       if (won && getIsBossRound()) {
         STATS.totalBossesSolved++;
+        boss_killed += 1;
       }
       saveAll();
       render();
@@ -895,7 +897,13 @@ function startEndlessGame() {
   function showEndlessSummary(allGuesses, boss) {
     allGuesses = [];
     let prevBest = STATS.endlessBestWords||0;
-    let goldEarned = endlessWordsSolved * 4;
+    let goldEarned = 0;
+    if(isEasyMode) {
+      goldEarned = endlessWordsSolved * 4;
+    } else {
+      goldEarned = endlessWordsSolved * 5;
+    }
+    goldEarned += boss_killed * 10;
     player.gold += goldEarned;
     STATS.totalGoldEarned += goldEarned;
     updateStats();
@@ -1173,7 +1181,7 @@ function showModifiers() {
     ${[
       { name: "Word count +1", desc: "6 words" },
       { name: "Guesses -1", desc: "6 guesses" },
-      { name: "Boss round", desc: "7-letter boss" },
+      { name: "Boss round", desc: "7-letter boss (+10 gold)" },
       { name: "Timer", desc: "60s per word" }
     ].map((m,i) => `
       <div class="modifier-card">
@@ -1188,6 +1196,7 @@ function showModal(html) { document.getElementById("modal-root").innerHTML = `<d
 function closeModal() { document.getElementById("modal-root").innerHTML=""; }
 
 function startGame() {
+  let boss_killed = 0;
   // Clear endlessWordList and endlessWordsSolved to prevent bleed from endless mode
   endlessWordList = [];
   endlessWordsSolved = 0;
@@ -1320,12 +1329,22 @@ function startGame() {
       inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuess();});
     }
     if(showAnswer) {
-      // Use the saved reference so we can remove it later
-// Remember this handler so quitEndless() can detach it later
-  document.addEventListener('keydown', handleNextWordEnter, {once:true});   
-  if(document.getElementById('next-word-btn')) {
-      document.getElementById('next-word-btn').focus();
-    }
+      // Remove any existing event listener first
+      if (window._nextWordEnterHandler) {
+        document.removeEventListener('keydown', window._nextWordEnterHandler);
+      }
+      // Create and store the new handler
+      window._nextWordEnterHandler = function(e) {
+        if(e.key === "Enter") {
+          document.removeEventListener('keydown', window._nextWordEnterHandler);
+          window._nextWordEnterHandler = null;
+          window.nextWord();
+        }
+      };
+      document.addEventListener('keydown', window._nextWordEnterHandler);
+      if(document.getElementById('next-word-btn')) {
+        document.getElementById('next-word-btn').focus();
+      }
     }
     document.getElementById('upgrade-sidebar').innerHTML = upgradesSidebarHTML();
     document.getElementById('upgrade-sidebar').style.display = "flex";
@@ -1489,6 +1508,7 @@ function startGame() {
       correct++; player.wordsCompleted++;
       STATS.totalWordsSolved++;
       if(boss && curWord===words) {
+        boss_killed++;
         bossSolved++;
         STATS.totalBossesSolved++;
       }
@@ -1503,6 +1523,12 @@ function startGame() {
     render();
   }
   window.nextWord = function() {
+    // Remove any existing event listeners before starting new word
+    const inp = document.getElementById('guess-inp');
+    if (inp) {
+        inp.onkeyup = null;  // Clear the old event listener
+    }
+    
     showAnswer = false;
     timeLeft = 60;
     curWord++;
@@ -1517,6 +1543,14 @@ function startGame() {
     }
     render();
     startTimer();
+    
+    // Set up new event listener for the new word
+    const newInp = document.getElementById('guess-inp');
+    if (newInp) {
+        newInp.onkeyup = e => {
+            if(e.key === "Enter") submitGuess();
+        };
+    }
   };
 
   function updateKeyboardState(guessesArr, target) {
@@ -1540,12 +1574,36 @@ function startGame() {
   function showMsg(t) {msg=t; document.getElementById('game-msg').textContent=t;}
 window.quitRun = function() {
     clearInterval(roundTimer);
+    // Clean up any existing event listeners
+    if (window._nextWordEnterHandler) {
+        document.removeEventListener('keydown', window._nextWordEnterHandler);
+        window._nextWordEnterHandler = null;
+    }
+    if (window._summaryEnterHandler) {
+        document.removeEventListener('keydown', window._summaryEnterHandler);
+        window._summaryEnterHandler = null;
+    }
+    const inp = document.getElementById('guess-inp');
+    if (inp) {
+        inp.onkeyup = null;
+    }
     hideGame();
     showMenu();
     saveAll();
-  }
+}
   function showSummary() {
-    let goldEarned = correct*4;
+    // Clean up any existing event listeners before showing summary
+    if (window._nextWordEnterHandler) {
+        document.removeEventListener('keydown', window._nextWordEnterHandler);
+        window._nextWordEnterHandler = null;
+    }
+    let goldEarned = 0;
+    if(isEasyMode) {
+      goldEarned = correct * 4;
+    } else {
+      goldEarned = correct * 5;
+    }
+    goldEarned += boss_killed*10;
     player.gold+=goldEarned;
     STATS.totalGoldEarned += goldEarned;
     if(correct>STATS.bestRunWords) STATS.bestRunWords=correct;
@@ -1567,14 +1625,16 @@ window.quitRun = function() {
       </div>
       <button class="menu-btn" onclick="closeModal();quitRun()">Continue</button>
     `);
-    // Add event listener for Enter key
-    document.addEventListener('keydown', function handleSummaryEnter(e) {
+    // Store the event listener in a global variable for proper cleanup
+    window._summaryEnterHandler = function(e) {
       if (e.key === 'Enter') {
-        document.removeEventListener('keydown', handleSummaryEnter);
+        document.removeEventListener('keydown', window._summaryEnterHandler);
+        window._summaryEnterHandler = null;
         closeModal();
         quitRun();
       }
-    });
+    };
+    document.addEventListener('keydown', window._summaryEnterHandler);
     document.getElementById('game').style.display="none";
     document.getElementById('menu').style.display="";
     document.getElementById('upgrade-sidebar').style.display = "none";
@@ -1663,7 +1723,7 @@ modeToggleRow.innerHTML = `
     Easy Mode
   </button>
   <span id="mode-toggle-tooltip" style="opacity:0;position:absolute;left:50%;transform:translateX(-50%);background:#20223a;color:#ffc838;font-size:0.98em;border-radius:0.7em;padding:0.5em 1.1em;box-shadow:0 2px 24px #0a0a0c33;white-space:pre-line;min-width:220px;max-width:350px;z-index:999;top:110%;pointer-events:none;transition:opacity 0.15s;">
-    <b>Easy Mode:</b> Only common five-letter words are used.\n<b>Hard Mode:</b> Any valid five-letter word may appear, including rare or obscure words.
+    <b>Easy Mode:</b> Only common five-letter words are used.\n<b>Hard Mode:</b> Any valid five-letter word may appear, including rare or obscure words. (+1 gold per word)
   </span>
 `;
 menuDiv.parentNode.insertBefore(modeToggleRow, menuDiv);
