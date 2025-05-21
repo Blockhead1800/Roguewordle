@@ -28,7 +28,7 @@ const UPGRADE_BASE = [
 const UPGRADE_TOOLTIPS = UPGRADE_BASE.map(u => u.long);
 let UPGRADES = UPGRADE_BASE.map((u,i)=>({...u, cost:UPGRADE_COSTS[i]}));
 
-const DEFAULT_STATS = {
+const DEFAULT_STATS_TOTAL = {
   totalGoldEarned: 0,
   totalWordsSolved: 0,
   totalWordsAttempted: 0,
@@ -41,8 +41,24 @@ const DEFAULT_STATS = {
   bestRunWords: 0,
   bestRunBoss: 0,
   bestRunGuesses: 0,
-  endlessBestWords: 0
+  endlessBestWords: 0 // This will be moved to DEFAULT_STATS_ENDLESS and removed from total
 };
+
+// Helper for deep copying
+const deepCopy = (obj) => JSON.parse(JSON.stringify(obj));
+
+const DEFAULT_STATS_NORMAL = deepCopy(DEFAULT_STATS_TOTAL);
+// Normal mode doesn't have endlessBestWords, so remove it or set to 0
+DEFAULT_STATS_NORMAL.endlessBestWords = 0;
+
+const DEFAULT_STATS_ENDLESS = deepCopy(DEFAULT_STATS_TOTAL);
+// Endless mode specific stats - keep endlessBestWords here
+// Clear out stats that don't make sense for endless mode if any (for now, all are kept)
+
+// Adjust DEFAULT_STATS_TOTAL to not track endlessBestWords directly
+DEFAULT_STATS_TOTAL.endlessBestWords = 0;
+
+
 // Endless mode state
 let isEndless = false;
 // Fix word bleed bug: always clear endlessWordList and endlessWordsSolved on run start
@@ -92,9 +108,18 @@ function quitEndless() {
   isEndless = false;
   // Only update best, do NOT award gold here (now handled in summary)
   if (typeof endlessWordsSolved !== "undefined") {
-    let prevBest = STATS.endlessBestWords || 0;
-    if (endlessWordsSolved > prevBest) {
-      STATS.endlessBestWords = endlessWordsSolved;
+    let currentRunBest = endlessWordsSolved;
+    if (currentRunBest > (STATS.endless.endlessBestWords || 0)) {
+      STATS.endless.endlessBestWords = currentRunBest;
+    }
+    // The STATS.total.endlessBestWords is a legacy/migrated field and represents the *absolute historical best*.
+    // It should only be updated if a new score surpasses this historical best.
+    // It is NOT a sum or aggregate but the peak score.
+    // The loader already handles migrating old STATS.endlessBestWords to STATS.total.endlessBestWords
+    // and also to STATS.endless.endlessBestWords.
+    // So, here we only update if current endless run is greater than the historical total.
+    if (currentRunBest > (STATS.total.endlessBestWords || 0)) {
+        STATS.total.endlessBestWords = currentRunBest;
     }
     updateStats();
   }
@@ -154,7 +179,8 @@ function startEndlessGame() {
     isBossRound = getIsBossRound();
     // If this is a boss round, increment bosses attempted at the start of the round
     if (isBossRound) {
-      STATS.totalBossesAttempted++;
+    STATS.endless.totalBossesAttempted++; // Update endless stats
+    STATS.total.totalBossesAttempted++;   // Update total stats
       endlessBossWord = randomWord(SEVEN_LETTER_WORDS);
       endlessWordList.push(endlessBossWord);
     } else {
@@ -321,7 +347,7 @@ function startEndlessGame() {
         let pos = unrevealed[Math.floor(Math.random()*unrevealed.length)];
         let hint = `Super Hint: Letter ${pos+1} is <b>${target[pos].toUpperCase()}</b>`;
         (wordHintHistory[curWord]||[]).push(hint);
-        STATS.totalHintsUsed[1]++;
+        STATS.endless.totalHintsUsed[1]++; STATS.total.totalHintsUsed[1]++;
       }
       if(i===2) {
         let already = new Set();
@@ -336,7 +362,7 @@ function startEndlessGame() {
         let hintLetter = unrevealed[Math.floor(Math.random()*unrevealed.length)];
         let hint = `Positive Hint: The word contains <b>${hintLetter}</b>`;
         (wordHintHistory[curWord]||[]).push(hint);
-        STATS.totalHintsUsed[2]++;
+        STATS.endless.totalHintsUsed[2]++; STATS.total.totalHintsUsed[2]++;
       }
       if(i===3) {
         let already = new Set();
@@ -353,13 +379,13 @@ function startEndlessGame() {
         let ltr = notInWord[Math.floor(Math.random()*notInWord.length)];
         let hint = `Negative Hint: The word does NOT contain <b>${ltr}</b>`;
         (wordHintHistory[curWord]||[]).push(hint);
-        STATS.totalHintsUsed[3]++;
+        STATS.endless.totalHintsUsed[3]++; STATS.total.totalHintsUsed[3]++;
       }
       if(i===4) {
         bonusGuessThisWord++;
         let hint = `Bonus Guess: You have an extra guess for this word!`;
         (wordHintHistory[curWord]||[]).push(hint);
-        STATS.totalHintsUsed[4]++;
+        STATS.endless.totalHintsUsed[4]++; STATS.total.totalHintsUsed[4]++;
       }
       endlessUpgradeUses[i]--;
       msg = "";
@@ -442,7 +468,7 @@ function startEndlessGame() {
     // EXTRA LIFE: If failed and endlessExtraLives > 0, consume and retry same word
     if (!won && endlessExtraLives > 0) {
       endlessExtraLives--;
-      STATS.totalHintsUsed[5]++; // Track extra life use
+      STATS.endless.totalHintsUsed[5]++; STATS.total.totalHintsUsed[5]++; // Track extra life use
       // Show a temporary message/modal
       showModal(`
         <div style="font-size:1.5em;color:#ffd700;margin-bottom:1em;">Extra Life used!</div>
@@ -468,13 +494,14 @@ function startEndlessGame() {
     showAnswer = true;
     if (won) {
       endlessWordsSolved++;
-      STATS.totalGuesses += (allGuesses[curWord] || []).length;
-      STATS.totalWordsAttempted++;
-      player.wordsCompleted++;
-      STATS.totalWordsSolved++;
+      const guessesCount = (allGuesses[curWord] || []).length;
+      STATS.endless.totalGuesses += guessesCount; STATS.total.totalGuesses += guessesCount;
+      STATS.endless.totalWordsAttempted++; STATS.total.totalWordsAttempted++;
+      player.wordsCompleted++; // This seems like a session-specific counter, might not need to be in STATS
+      STATS.endless.totalWordsSolved++; STATS.total.totalWordsSolved++;
       // For boss rounds, only increment solved if won and boss round
       if (won && getIsBossRound()) {
-        STATS.totalBossesSolved++;
+        STATS.endless.totalBossesSolved++; STATS.total.totalBossesSolved++;
         boss_killed += 1;
       }
       saveAll();
@@ -483,13 +510,18 @@ function startEndlessGame() {
     } else {
       // Game over -- set flag, update stats, and show summary
       isEndlessOver = true;
-      STATS.totalWordsAttempted += 1;
+      STATS.endless.totalWordsAttempted++; STATS.total.totalWordsAttempted++;
       // Bosses attempted is now incremented at round start, so don't double-count here
-      // if(getIsBossRound()) STATS.totalBossesAttempted++;
-      STATS.totalGuesses += (allGuesses[curWord]||[]).length;
-      let prevBest = STATS.endlessBestWords||0;
-      if(endlessWordsSolved > prevBest) {
-        STATS.endlessBestWords = endlessWordsSolved;
+      const guessesCount = (allGuesses[curWord]||[]).length;
+      STATS.endless.totalGuesses += guessesCount; STATS.total.totalGuesses += guessesCount;
+      
+      let currentRunBest = endlessWordsSolved;
+      if (currentRunBest > (STATS.endless.endlessBestWords || 0)) {
+        STATS.endless.endlessBestWords = currentRunBest;
+      }
+      // Update total.endlessBestWords if this run is a new absolute historical best.
+      if (currentRunBest > (STATS.total.endlessBestWords || 0)) {
+        STATS.total.endlessBestWords = currentRunBest;
       }
       saveAll();
       updateStats();
@@ -506,17 +538,17 @@ function startEndlessGame() {
 
   // Show endless summary and award gold
   function showEndlessSummary(allGuesses, boss) {
-    allGuesses = [];
-    let prevBest = STATS.endlessBestWords||0;
+    allGuesses = []; // This seems to clear the history before display, intentional?
+    let prevBestDisplay = STATS.endless.endlessBestWords || 0; // For display comparison
     let goldEarned = 0;
     if(isEasyMode) {
       goldEarned = endlessWordsSolved * 4;
     } else {
       goldEarned = endlessWordsSolved * 5;
     }
-    goldEarned += boss_killed * 10;
+    goldEarned += boss_killed * 10; // boss_killed is specific to this endless run
     player.gold += goldEarned;
-    STATS.totalGoldEarned += goldEarned;
+    STATS.endless.totalGoldEarned += goldEarned; STATS.total.totalGoldEarned += goldEarned;
     updateStats();
     showModal(`
       <h2 style="font-size:2em;color:#ffd700;">Endless Run Over!</h2>
@@ -524,9 +556,9 @@ function startEndlessGame() {
         Word gotten wrong: <b>${endlessWordList[curWord]}</b><br>
         Words solved: <b>${endlessWordsSolved}</b><br>
         Gold earned: <b>${goldEarned}</b><br>
-        ${endlessWordsSolved > prevBest ? `<span style="color:#ffd700;">New Best!</span><br>`:""}
+        ${endlessWordsSolved > prevBestDisplay ? `<span style="color:#ffd700;">New Best!</span><br>`:""}
       </div>
-      <div style="margin-bottom:1em;">${allGuesses.map((g,i)=>
+      <div style="margin-bottom:1em;">${allGuesses.map((g,i)=> // allGuesses is empty here due to earlier line
         `<div style="margin-bottom:.3em;font-size:1.06em;">
         ${g && (boss && ((i+1)%5===0) ? "Boss: " : "")}${g && g[g.length-1]===endlessWordList[i]?"✔️":"❌"} ${endlessWordList[i]}</div>`).join("")}
       </div>
@@ -571,7 +603,7 @@ function startEndlessGame() {
   window.rerollCurrentWordEndless = function() {
     if (upgradeLevels[6] > 0 && endlessUpgradeUses[6] > 0 && !isRoundOver()) {
       endlessUpgradeUses[6]--;
-      STATS.totalHintsUsed[6]++; // Track reroll use
+      STATS.endless.totalHintsUsed[6]++; STATS.total.totalHintsUsed[6]++; // Track reroll use
       // Remove current word and generate a new one (same type)
       let isBoss = getIsBossRound();
       let len = isBoss ? 7 : 5;
@@ -591,10 +623,63 @@ function startEndlessGame() {
 }
 // EXTRA LIFE: Ensure stats and upgrades arrays are correct length (7)
 let STATS = (() => {
-  let s = JSON.parse(localStorage.getItem("wordrun_stats") || JSON.stringify(DEFAULT_STATS));
-  if (!Array.isArray(s.totalHintsUsed) || s.totalHintsUsed.length < 7) {
-    s.totalHintsUsed = (s.totalHintsUsed||[]).slice(0,7);
-    while (s.totalHintsUsed.length < 7) s.totalHintsUsed.push(0);
+  let loadedStats = JSON.parse(localStorage.getItem("wordrun_stats"));
+  let s = {};
+
+  const validateStatObject = (statObj, defaultStatObj) => {
+    let newStatObj = deepCopy(defaultStatObj); // Start with a clean default structure
+    if (statObj && typeof statObj === 'object') {
+      for (const key in defaultStatObj) {
+        if (statObj.hasOwnProperty(key)) {
+          if (key === "totalHintsUsed") {
+            if (Array.isArray(statObj[key]) && statObj[key].length === 7) {
+              newStatObj[key] = statObj[key];
+            } else {
+              // If incorrect, keep the default
+              console.warn(`Invalid totalHintsUsed for ${key} in loaded stats, using default.`);
+            }
+          } else if (typeof statObj[key] === typeof defaultStatObj[key]) {
+            newStatObj[key] = statObj[key];
+          } else {
+            // If type mismatch, keep the default
+            console.warn(`Type mismatch for ${key} in loaded stats, using default.`);
+          }
+        }
+      }
+    }
+    // Ensure totalHintsUsed is always a valid array of 7 numbers
+    if (!Array.isArray(newStatObj.totalHintsUsed) || newStatObj.totalHintsUsed.length !== 7) {
+        newStatObj.totalHintsUsed = (Array.isArray(newStatObj.totalHintsUsed) ? newStatObj.totalHintsUsed.slice(0,7) : []);
+        while (newStatObj.totalHintsUsed.length < 7) newStatObj.totalHintsUsed.push(0);
+    }
+    return newStatObj;
+  };
+
+  if (loadedStats && loadedStats.normal && loadedStats.endless && loadedStats.total) {
+    // New format detected
+    s.normal = validateStatObject(loadedStats.normal, DEFAULT_STATS_NORMAL);
+    s.endless = validateStatObject(loadedStats.endless, DEFAULT_STATS_ENDLESS);
+    s.total = validateStatObject(loadedStats.total, DEFAULT_STATS_TOTAL);
+  } else {
+    // Old format detected, or no stats found
+    let oldTotalStats = loadedStats || DEFAULT_STATS_TOTAL; // Use loaded if available, else default
+
+    // Initialize with defaults
+    s.normal = deepCopy(DEFAULT_STATS_NORMAL);
+    s.endless = deepCopy(DEFAULT_STATS_ENDLESS);
+    s.total = validateStatObject(oldTotalStats, DEFAULT_STATS_TOTAL); // Validate the loaded old stats against total structure
+
+    // Migrate endlessBestWords
+    if (oldTotalStats && oldTotalStats.hasOwnProperty('endlessBestWords')) {
+      s.endless.endlessBestWords = oldTotalStats.endlessBestWords;
+    }
+    // Ensure total.endlessBestWords is 0 as it's now in endless
+    s.total.endlessBestWords = 0;
+    
+    // If loadedStats was null (no stats ever saved), ensure total is also from its default
+    if (!loadedStats) {
+        s.total = deepCopy(DEFAULT_STATS_TOTAL);
+    }
   }
   return s;
 })();
@@ -609,11 +694,17 @@ let upgradeLevels = (() => {
 let player = JSON.parse(localStorage.getItem("wordrun_player") || JSON.stringify({ gold: 5, wordsCompleted: 0 }));
 
 function saveAll() {
-  // Ensure arrays are always length 7 for stats/upgrades
-  if (Array.isArray(STATS.totalHintsUsed)) {
-    STATS.totalHintsUsed = STATS.totalHintsUsed.slice(0,7);
-    while (STATS.totalHintsUsed.length < 7) STATS.totalHintsUsed.push(0);
-  }
+  // Ensure arrays are always length 7 for stats/upgrades for all stat objects
+  ['normal', 'endless', 'total'].forEach(mode => {
+    if (STATS[mode] && Array.isArray(STATS[mode].totalHintsUsed)) {
+      STATS[mode].totalHintsUsed = STATS[mode].totalHintsUsed.slice(0,7);
+      while (STATS[mode].totalHintsUsed.length < 7) STATS[mode].totalHintsUsed.push(0);
+    } else if (STATS[mode]) {
+      // Ensure it exists even if not an array initially (should be caught by loader, but good fallback)
+      STATS[mode].totalHintsUsed = [0,0,0,0,0,0,0];
+    }
+  });
+
   if (Array.isArray(upgradeLevels)) {
     upgradeLevels = upgradeLevels.slice(0,7);
     while (upgradeLevels.length < 7) upgradeLevels.push(0);
@@ -624,7 +715,9 @@ function saveAll() {
 }
 function resetStatsAndGold(confirmFirst=true) {
   if(confirmFirst && !confirm("Reset all statistics, gold, and upgrades? This cannot be undone.")) return;
-  STATS = JSON.parse(JSON.stringify(DEFAULT_STATS));
+  STATS.normal = deepCopy(DEFAULT_STATS_NORMAL);
+  STATS.endless = deepCopy(DEFAULT_STATS_ENDLESS);
+  STATS.total = deepCopy(DEFAULT_STATS_TOTAL);
   upgradeLevels = [0,0,0,0,0,0,0]; // EXTRA LIFE, Added slot for reroll
   player = { gold: 5, wordsCompleted: 0 };
   saveAll();
@@ -729,52 +822,107 @@ function showInventory() {
     <button class="menu-btn" onclick="closeModal()">Close</button>
   `);
 }
-function showStats() {
-  let avgGuesses = STATS.totalWordsSolved ? (STATS.totalGuesses / STATS.totalWordsSolved).toFixed(2) : "—";
-  // Only count hints (not extra life) for hints per word
-  let hintsUsedSum = STATS.totalHintsUsed.slice(1,5).reduce((a,b)=>a+b,0);
-  let avgHintsPerWord = STATS.totalWordsSolved ? (
-    hintsUsedSum / STATS.totalWordsSolved
+function showStats(modeToDisplay = 'total') {
+  let currentStatsView;
+  let titleMode;
+
+  if (modeToDisplay === 'normal') {
+    currentStatsView = STATS.normal;
+    titleMode = "Normal Mode";
+  } else if (modeToDisplay === 'endless') {
+    currentStatsView = STATS.endless;
+    titleMode = "Endless Mode";
+  } else {
+    currentStatsView = STATS.total;
+    titleMode = "Total";
+  }
+
+  let avgGuesses = currentStatsView.totalWordsSolved ? (currentStatsView.totalGuesses / currentStatsView.totalWordsSolved).toFixed(2) : "—";
+  let hintsUsedSum = currentStatsView.totalHintsUsed.slice(1,5).reduce((a,b)=>a+b,0); // Sum for Super, Pos, Neg, Bonus
+  let avgHintsPerWord = currentStatsView.totalWordsSolved ? (
+    hintsUsedSum / currentStatsView.totalWordsSolved
   ).toFixed(2) : "—";
+
+  let generalStatsHTML = `
+    <tr><td class="stats-label">Gold Earned</td><td>${currentStatsView.totalGoldEarned}</td></tr>
+    <tr><td class="stats-label">Runs Played</td><td>${currentStatsView.runsPlayed !== undefined ? currentStatsView.runsPlayed : 'N/A'}</td></tr>
+    <tr><td class="stats-label">Runs Completed</td><td>${currentStatsView.runsCompleted !== undefined ? currentStatsView.runsCompleted : 'N/A'}</td></tr>
+  `;
+
+  if (modeToDisplay === 'normal') {
+    generalStatsHTML += `
+      <tr><td class="stats-label">Best Run (Words)</td><td>${currentStatsView.bestRunWords||0}</td></tr>
+      <tr><td class="stats-label">Best Run (Bosses)</td><td>${currentStatsView.bestRunBoss||0}</td></tr>
+      <tr><td class="stats-label">Best Run (Least Guesses)</td><td>${currentStatsView.bestRunGuesses||"—"}</td></tr>
+    `;
+  } else if (modeToDisplay === 'endless') {
+    generalStatsHTML += `
+      <tr><td class="stats-label">Best Endless Run (Words)</td><td>${currentStatsView.endlessBestWords||0}</td></tr>
+    `;
+  } else { // Total
+    generalStatsHTML += `
+      <tr><td class="stats-label">Best Normal Run (Words)</td><td>${STATS.normal.bestRunWords||0}</td></tr>
+      <tr><td class="stats-label">Best Normal Run (Bosses)</td><td>${STATS.normal.bestRunBoss||0}</td></tr>
+      <tr><td class="stats-label">Best Normal Run (Least Guesses)</td><td>${STATS.normal.bestRunGuesses||"—"}</td></tr>
+      <tr><td class="stats-label">Historical Best Endless (Words)</td><td>${currentStatsView.endlessBestWords||0}</td></tr>
+    `;
+    // For total, runsPlayed and runsCompleted are directly from STATS.total, which is sum of normal runs.
+    // If endless runs were tracked, this would need adjustment or clarification.
+  }
+  
+  let wordsBossesHTML = `
+    <tr><td class="stats-label">Words Solved</td><td>${currentStatsView.totalWordsSolved}</td></tr>
+    <tr><td class="stats-label">Words Attempted</td><td>${currentStatsView.totalWordsAttempted}</td></tr>
+    <tr><td class="stats-label">Bosses Solved</td><td>${currentStatsView.totalBossesSolved}</td></tr>
+    <tr><td class="stats-label">Bosses Attempted</td><td>${currentStatsView.totalBossesAttempted}</td></tr>
+  `;
+
+  let hintsHTML = `
+    <tr><td class="stats-label">Super Hints Used</td><td>${currentStatsView.totalHintsUsed[1]}</td></tr>
+    <tr><td class="stats-label">Positive Hints Used</td><td>${currentStatsView.totalHintsUsed[2]}</td></tr>
+    <tr><td class="stats-label">Negative Hints Used</td><td>${currentStatsView.totalHintsUsed[3]}</td></tr>
+    <tr><td class="stats-label">Bonus Guesses Used</td><td>${currentStatsView.totalHintsUsed[4]}</td></tr>
+    <tr><td class="stats-label">Word Rerolls Used</td><td>${currentStatsView.totalHintsUsed[6]}</td></tr>
+    <tr><td class="stats-label">Extra Lives Used</td><td>${currentStatsView.totalHintsUsed[5]}</td></tr>
+    <tr><td class="stats-label">Hints per Solved Word (avg)</td><td>${avgHintsPerWord}</td></tr>
+  `;
+  
+  let guessesHTML = `
+    <tr><td class="stats-label">Total Guesses</td><td>${currentStatsView.totalGuesses}</td></tr>
+    <tr><td class="stats-label">Guesses per Solved Word (avg)</td><td>${avgGuesses}</td></tr>
+  `;
+
   showModal(`
     <h2 class="stats-title">Player Statistics</h2>
-    <div>
+    <div class="stats-tabs">
+      <button class="stat-tab-btn ${modeToDisplay === 'normal' ? 'active' : ''}" onclick="showStats('normal')">Normal</button>
+      <button class="stat-tab-btn ${modeToDisplay === 'endless' ? 'active' : ''}" onclick="showStats('endless')">Endless</button>
+      <button class="stat-tab-btn ${modeToDisplay === 'total' ? 'active' : ''}" onclick="showStats('total')">Total</button>
+    </div>
+    <div class="stats-content">
+      <h3 style="text-align:center; margin-bottom:0.8em; color:#e0c46c;">${titleMode}</h3>
       <div class="stats-group">
         <table class="stats-table">
           <tr><th colspan="2">General</th></tr>
-          <tr><td class="stats-label">Total Gold Earned</td><td>${STATS.totalGoldEarned}</td></tr>
-          <tr><td class="stats-label">Runs Played</td><td>${STATS.runsPlayed}</td></tr>
-          <tr><td class="stats-label">Runs Completed</td><td>${STATS.runsCompleted}</td></tr>
-          <tr><td class="stats-label">Best Endless Run (Words)</td><td>${STATS.endlessBestWords||0}</td></tr>
-          <tr><td class="stats-label">Best Run (Least Guesses)</td><td>${STATS.bestRunGuesses||"—"}</td></tr>
+          ${generalStatsHTML}
         </table>
       </div>
       <div class="stats-group">
         <table class="stats-table">
           <tr><th colspan="2">Words & Bosses</th></tr>
-          <tr><td class="stats-label">Words Solved</td><td>${STATS.totalWordsSolved}</td></tr>
-          <tr><td class="stats-label">Words Attempted</td><td>${STATS.totalWordsAttempted}</td></tr>
-          <tr><td class="stats-label">Bosses Solved</td><td>${STATS.totalBossesSolved}</td></tr>
-          <tr><td class="stats-label">Bosses Attempted</td><td>${STATS.totalBossesAttempted}</td></tr>
+          ${wordsBossesHTML}
         </table>
       </div>
       <div class="stats-group">
         <table class="stats-table">
           <tr><th colspan="2">Hints Used</th></tr>
-          <tr><td class="stats-label">Super Hints Used</td><td>${STATS.totalHintsUsed[1]}</td></tr>
-          <tr><td class="stats-label">Positive Hints Used</td><td>${STATS.totalHintsUsed[2]}</td></tr>
-          <tr><td class="stats-label">Negative Hints Used</td><td>${STATS.totalHintsUsed[3]}</td></tr>
-          <tr><td class="stats-label">Bonus Guesses Used</td><td>${STATS.totalHintsUsed[4]}</td></tr>
-          <tr><td class="stats-label">Word Rerolls Used</td><td>${STATS.totalHintsUsed[6]}</td></tr>
-          <tr><td class="stats-label">Extra Lives Used</td><td>${STATS.totalHintsUsed[5]}</td></tr>
-          <tr><td class="stats-label">Hints per Solved Word (avg)</td><td>${avgHintsPerWord}</td></tr>
+          ${hintsHTML}
         </table>
       </div>
       <div class="stats-group">
         <table class="stats-table">
           <tr><th colspan="2">Guesses</th></tr>
-          <tr><td class="stats-label">Total Guesses</td><td>${STATS.totalGuesses}</td></tr>
-          <tr><td class="stats-label">Guesses per Solved Word (avg)</td><td>${avgGuesses}</td></tr>
+          ${guessesHTML}
         </table>
       </div>
     </div>
@@ -839,7 +987,7 @@ function startGame() {
   ];
 
   wordHintHistory[0] = [];
-  STATS.runsPlayed += 1;
+  STATS.normal.runsPlayed += 1; STATS.total.runsPlayed += 1;
   saveAll();
 
   function upgradesSidebarHTML() {
@@ -878,7 +1026,7 @@ function startGame() {
   window.rerollCurrentWordRun = function() {
     if (upgradeLevels[6] > 0 && (upgradeLevels[6] - rerollUses) > 0 && !isRoundOver()) {
       rerollUses++;
-      STATS.totalHintsUsed[6]++; // Track reroll use
+      STATS.normal.totalHintsUsed[6]++; STATS.total.totalHintsUsed[6]++; // Track reroll use
       let isBoss = boss && curWord === words;
       let len = isBoss ? 7 : 5;
       let newWord = isBoss ? randomWord(SEVEN_LETTER_WORDS) : randomWord(FIVE_LETTER_WORDS);
@@ -1008,7 +1156,7 @@ function startGame() {
       let pos = unrevealed[Math.floor(Math.random()*unrevealed.length)];
       let hint = `Super Hint: Letter ${pos+1} is <b>${target[pos].toUpperCase()}</b>`;
       (wordHintHistory[curWord]||[]).push(hint);
-      hintUses[1]++; STATS.totalHintsUsed[1]++;
+      hintUses[1]++; STATS.normal.totalHintsUsed[1]++; STATS.total.totalHintsUsed[1]++;
     }
     if(i===2 && hintUses[2]<upgradeLevels[2]) {
       let already = new Set();
@@ -1023,7 +1171,7 @@ function startGame() {
       let hintLetter = unrevealed[Math.floor(Math.random()*unrevealed.length)];
       let hint = `Positive Hint: The word contains <b>${hintLetter}</b>`;
       (wordHintHistory[curWord]||[]).push(hint);
-      hintUses[2]++; STATS.totalHintsUsed[2]++;
+      hintUses[2]++; STATS.normal.totalHintsUsed[2]++; STATS.total.totalHintsUsed[2]++;
     }
     if(i===3 && hintUses[3]<upgradeLevels[3]) {
       let already = new Set();
@@ -1040,13 +1188,13 @@ function startGame() {
       let ltr = notInWord[Math.floor(Math.random()*notInWord.length)];
       let hint = `Negative Hint: The word does NOT contain <b>${ltr}</b>`;
       (wordHintHistory[curWord]||[]).push(hint);
-      hintUses[3]++; STATS.totalHintsUsed[3]++;
+      hintUses[3]++; STATS.normal.totalHintsUsed[3]++; STATS.total.totalHintsUsed[3]++;
     }
     if(i===4 && hintUses[4]<upgradeLevels[4]) {
       bonusGuessThisWord++;
       let hint = `Bonus Guess: You have an extra guess for this word!`;
       (wordHintHistory[curWord]||[]).push(hint);
-      hintUses[4]++; STATS.totalHintsUsed[4]++;
+      hintUses[4]++; STATS.normal.totalHintsUsed[4]++; STATS.total.totalHintsUsed[4]++;
     }
     msg = "";
     saveAll();
@@ -1116,20 +1264,22 @@ function startGame() {
   function showEndOfWord(won) {
     showAnswer = true;
     if (won) {
-      correct++; player.wordsCompleted++;
-      STATS.totalWordsSolved++;
+      correct++; player.wordsCompleted++; // player.wordsCompleted seems session-specific
+      STATS.normal.totalWordsSolved++; STATS.total.totalWordsSolved++;
       if(boss && curWord===words) {
-        boss_killed++;
-        bossSolved++;
-        STATS.totalBossesSolved++;
+        boss_killed++; // session-specific
+        bossSolved++;  // session-specific for normal run best
+        STATS.normal.totalBossesSolved++; STATS.total.totalBossesSolved++;
       }
     }
     // Always attempted
-    STATS.totalWordsAttempted++;
-    if(boss && curWord===words) STATS.totalBossesAttempted++;
+    STATS.normal.totalWordsAttempted++; STATS.total.totalWordsAttempted++;
+    if(boss && curWord===words) {
+      STATS.normal.totalBossesAttempted++; STATS.total.totalBossesAttempted++;
+    }
     // Guesses
     let guessesThis = (allGuesses[curWord]||[]);
-    STATS.totalGuesses += guessesThis.length;
+    STATS.normal.totalGuesses += guessesThis.length; STATS.total.totalGuesses += guessesThis.length;
     saveAll();
     render();
   }
@@ -1214,14 +1364,17 @@ window.quitRun = function() {
     } else {
       goldEarned = correct * 5;
     }
-    goldEarned += boss_killed*10;
+    goldEarned += boss_killed*10; // boss_killed is for this specific run
     player.gold+=goldEarned;
-    STATS.totalGoldEarned += goldEarned;
-    if(correct>STATS.bestRunWords) STATS.bestRunWords=correct;
-    if(bossSolved>STATS.bestRunBoss) STATS.bestRunBoss=bossSolved;
-    let guessesUsed = allGuesses.flat().length;
-    if(STATS.bestRunGuesses==0||guessesUsed<STATS.bestRunGuesses) STATS.bestRunGuesses=guessesUsed;
-    STATS.runsCompleted += 1;
+    STATS.normal.totalGoldEarned += goldEarned; STATS.total.totalGoldEarned += goldEarned;
+
+    if(correct > (STATS.normal.bestRunWords || 0)) STATS.normal.bestRunWords = correct;
+    if(bossSolved > (STATS.normal.bestRunBoss || 0)) STATS.normal.bestRunBoss = bossSolved;
+    let guessesUsedThisRun = allGuesses.flat().length; // Assuming allGuesses is for the current run
+    if(STATS.normal.bestRunGuesses == 0 || guessesUsedThisRun < STATS.normal.bestRunGuesses) {
+      STATS.normal.bestRunGuesses = guessesUsedThisRun;
+    }
+    STATS.normal.runsCompleted += 1; STATS.total.runsCompleted += 1;
     saveAll();
     updateStats();
     showModal(`
@@ -1287,7 +1440,7 @@ document.addEventListener("keydown", function(e){
 window.rerollCurrentWordEndless = function() {
   if (upgradeLevels[6] > 0 && endlessUpgradeUses[6] > 0 && !isRoundOver()) {
     endlessUpgradeUses[6]--;
-    STATS.totalHintsUsed[6]++; // Track reroll use
+    STATS.endless.totalHintsUsed[6]++; STATS.total.totalHintsUsed[6]++; // Track reroll use in endless and total
     // Remove current word and generate a new one (same type)
     let isBoss = getIsBossRound();
     let len = isBoss ? 7 : 5;
@@ -1420,9 +1573,13 @@ function quitEndless() {
   showMenu();
   isEndless = false;
   if (typeof endlessWordsSolved !== "undefined") {
-    let prevBest = STATS.endlessBestWords || 0;
-    if (endlessWordsSolved > prevBest) {
-      STATS.endlessBestWords = endlessWordsSolved;
+    let currentRunBest = endlessWordsSolved;
+    if (currentRunBest > (STATS.endless.endlessBestWords || 0)) {
+      STATS.endless.endlessBestWords = currentRunBest;
+    }
+    // Update total.endlessBestWords if this run is a new absolute historical best.
+    if (currentRunBest > (STATS.total.endlessBestWords || 0)) {
+      STATS.total.endlessBestWords = currentRunBest;
     }
     updateStats();
   }
