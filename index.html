@@ -311,6 +311,53 @@ hr { border: none; border-top: 1.5px solid #323255; margin: 1.5em 0;}
   }
   .stats-table th { color:#ffc838; font-weight:700;}
   .stats-label { color:#b0b8d0;}
+
+/* Tile Input styles */
+.tile-input {
+  width: var(--tile-size); 
+  height: var(--tile-size);
+  background-color: transparent; /* Explicitly transparent */
+  color: #fff;
+  font-size: 2em; 
+  font-weight: bold;
+  text-align: center;
+  border-radius: 9px;
+  border: 2.5px solid #4a4e69; /* Default border for active input tile - slightly muted */
+  text-transform: uppercase;
+  caret-color: var(--accent); 
+  padding: 0;
+  margin: 0; 
+  box-sizing: border-box;
+  /* To make it feel more like a tile */
+  display: inline-flex; /* Use flex to center content like .tile */
+  align-items: center;
+  justify-content: center;
+  font-family: inherit; /* Ensure it uses the body font */
+}
+.tile-input:focus {
+  outline: none;
+  border-color: var(--accent); /* Accent color border on focus */
+  box-shadow: 0 0 8px var(--accent); /* Subtle glow for focus */
+}
+
+/* Styling for future guess slots (divs) */
+.tile.future-guess {
+  width: var(--tile-size); 
+  height: var(--tile-size);
+  background-color: var(--dark); /* Darker background for empty future slots */
+  border: 2.5px solid #30334a; /* Dimmer border for future slots */
+  border-radius: 9px;
+  box-sizing: border-box;
+  /* Ensure it doesn't animate like a guessed tile */
+  animation: none; 
+  /* Ensure no text properties from .tile interfere if they were accidentally inherited */
+  color: transparent; 
+  font-size: 0; 
+  display: flex; /* Added to match .tile structure */
+  align-items: center; /* Added to match .tile structure */
+  justify-content: center; /* Added to match .tile structure */
+}
+
 /* Tooltip styles */
 .upg-tooltip, .upgrade-tooltip {
   position: absolute;
@@ -580,8 +627,8 @@ function startEndlessGame() {
       <div id="tiles"></div>
       ${wordHintHistory[curWord].length ? `<div class="hint-history"><b>Hints:</b><br>${wordHintHistory[curWord].map(h=>h).join("<br>")}</div>`:""}
       ${!showAnswer && !isRoundOver() ? `
-        <input type="text" class="guess-input" id="guess-inp" maxlength="${len}" autocomplete="off" placeholder="${len}-letter word">
-        <button class="menu-btn" style="width:100%;" onclick="submitGuessEndless()">Guess</button>
+        
+        
       ` : ""}
       <div class="message" id="game-msg">${msg}</div>
       ${showAnswer ? `
@@ -593,10 +640,38 @@ function startEndlessGame() {
       <div id="kb-area"></div>
       <button class="menu-btn" style="background:#353555;margin-top:1.2em;" onclick="quitEndless()">Quit</button>
     `;
-    let guessRows = guessesThis.map(guess =>
-      tileRowHTML(guess, target)
-    ).join("");
-    document.getElementById('tiles').innerHTML = guessRows;
+    // START GRID MODIFICATION
+    let tilesHTML = "";
+    const maxRows = totalGuesses;
+    const wordLength = len;
+
+    // Render past guesses
+    guessesThis.forEach(guess => {
+      tilesHTML += tileRowHTML(guess, target);
+    });
+
+    // Render current guess row (if game not over)
+    let renderedRows = guessesThis.length;
+    if (!showAnswer && !isRoundOver() && renderedRows < maxRows) {
+      tilesHTML += '<div class="tile-row current-guess-row">';
+      for (let i = 0; i < wordLength; i++) {
+        // Use input elements for the current guess row
+        tilesHTML += `<input type="text" class="tile-input" maxlength="1" data-index="${i}">`;
+      }
+      tilesHTML += '</div>';
+      renderedRows++;
+    }
+
+    // Render future guess rows
+    for (let i = renderedRows; i < maxRows; i++) {
+      tilesHTML += '<div class="tile-row future-guess-row">';
+      for (let j = 0; j < wordLength; j++) {
+        tilesHTML += '<div class="tile future-guess"></div>';
+      }
+      tilesHTML += '</div>';
+    }
+    document.getElementById('tiles').innerHTML = tilesHTML;
+    // END GRID MODIFICATION
     updateKeyboardState(guessesThis, target);
     document.getElementById('kb-area').innerHTML = KB_ROWS.map(row =>
       `<div class="kb-row">${row.map(l =>
@@ -605,9 +680,10 @@ function startEndlessGame() {
     ).join("");
     if (timerEnabled && document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
     if(!showAnswer && !isRoundOver()) {
-      let inp = document.getElementById('guess-inp');
-      inp && inp.focus();
-      inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuessEndless();});
+      // let inp = document.getElementById('guess-inp'); // Old input
+      // inp && inp.focus(); // Old input
+      // inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuessEndless();}); // Old input
+      initializeGuessGridInput(len, submitGuessEndless); // New grid input
     }
     if(showAnswer) {
 // Store a reference so quitEndless() can remove it later
@@ -779,7 +855,14 @@ function startEndlessGame() {
     let isBoss = getIsBossRound();
     let len = isBoss?7:5;
     let target = endlessWordList[curWord];
-    let val = document.getElementById('guess-inp').value.trim().toLowerCase();
+    // let val = document.getElementById('guess-inp').value.trim().toLowerCase(); // Old input
+    // New logic to retrieve guess from grid
+    let guessChars = [];
+    const inputTiles = document.querySelectorAll('.tile-input');
+    inputTiles.forEach(tile => {
+      guessChars.push(tile.value);
+    });
+    let val = guessChars.join('').trim().toLowerCase();
 
     if(val.length !== len) return showMsg(`Word must be ${len} letters.`);
     if(isBoss) {
@@ -1299,8 +1382,8 @@ function startGame() {
       <div id="tiles"></div>
       ${wordHintHistory[curWord].length ? `<div class="hint-history"><b>Hints:</b><br>${wordHintHistory[curWord].map(h=>h).join("<br>")}</div>`:""}
       ${!showAnswer && !isRoundOver() ? `
-        <input type="text" class="guess-input" id="guess-inp" maxlength="${len}" autocomplete="off" placeholder="${len}-letter word">
-        <button class="menu-btn" style="width:100%;" onclick="submitGuess()">Guess</button>
+        
+        
       ` : ""}
       <div class="message" id="game-msg">${msg}</div>
       ${showAnswer ? `
@@ -1312,10 +1395,38 @@ function startGame() {
       <div id="kb-area"></div>
       <button class="menu-btn" style="background:#353555;margin-top:1.2em;" onclick="quitRun()">Quit</button>
     `;
-    let guessRows = guessesThis.map(guess =>
-      tileRowHTML(guess, target)
-    ).join("");
-    document.getElementById('tiles').innerHTML = guessRows;
+    // START GRID MODIFICATION
+    let tilesHTML = "";
+    const maxRows = totalGuesses;
+    const wordLength = len;
+
+    // Render past guesses
+    guessesThis.forEach(guess => {
+      tilesHTML += tileRowHTML(guess, target);
+    });
+
+    // Render current guess row (if game not over)
+    let renderedRows = guessesThis.length;
+    if (!showAnswer && !isRoundOver() && renderedRows < maxRows) {
+      tilesHTML += '<div class="tile-row current-guess-row">';
+      for (let i = 0; i < wordLength; i++) {
+        // Use input elements for the current guess row
+        tilesHTML += `<input type="text" class="tile-input" maxlength="1" data-index="${i}">`;
+      }
+      tilesHTML += '</div>';
+      renderedRows++;
+    }
+
+    // Render future guess rows
+    for (let i = renderedRows; i < maxRows; i++) {
+      tilesHTML += '<div class="tile-row future-guess-row">';
+      for (let j = 0; j < wordLength; j++) {
+        tilesHTML += '<div class="tile future-guess"></div>';
+      }
+      tilesHTML += '</div>';
+    }
+    document.getElementById('tiles').innerHTML = tilesHTML;
+    // END GRID MODIFICATION
     updateKeyboardState(guessesThis, target);
     document.getElementById('kb-area').innerHTML = KB_ROWS.map(row =>
       `<div class="kb-row">${row.map(l =>
@@ -1324,9 +1435,10 @@ function startGame() {
     ).join("");
     if (timerEnabled && document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
     if(!showAnswer && !isRoundOver()) {
-      let inp = document.getElementById('guess-inp');
-      inp && inp.focus();
-      inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuess();});
+      // let inp = document.getElementById('guess-inp'); // Old input
+      // inp && inp.focus(); // Old input
+      // inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuess();}); // Old input
+      initializeGuessGridInput(len, submitGuess); // New grid input
     }
     if(showAnswer) {
       // Remove any existing event listener first
@@ -1460,7 +1572,14 @@ function startGame() {
     let isBoss = boss && curWord === words;
     let len = isBoss?7:5;
     let target = isBoss?bossWord:wordList[curWord];
-    let val = document.getElementById('guess-inp').value.trim().toLowerCase();
+    // let val = document.getElementById('guess-inp').value.trim().toLowerCase(); // Old input
+    // New logic to retrieve guess from grid
+    let guessChars = [];
+    const inputTiles = document.querySelectorAll('.tile-input');
+    inputTiles.forEach(tile => {
+      guessChars.push(tile.value);
+    });
+    let val = guessChars.join('').trim().toLowerCase();
 
     if(val.length !== len) return showMsg(`Word must be ${len} letters.`);
     if(isBoss) {
@@ -1665,6 +1784,53 @@ function getTileColors(guess, target) {
   return colors;
 }
 function randomWord(list) { return list[Math.floor(Math.random()*list.length)]; }
+
+// Function to initialize guess grid input handling
+function initializeGuessGridInput(wordLength, submitFunction) {
+  const inputs = document.querySelectorAll('.tile-input');
+  if (!inputs.length) return;
+
+  inputs.forEach((input, idx) => {
+    input.addEventListener('input', (e) => {
+      // Automatically focus next input or submit on last input
+      if (e.target.value && idx < inputs.length - 1) {
+        inputs[idx + 1].focus();
+      }
+      // Optional: auto-submit if last input is filled, consider UX
+      // else if (e.target.value && idx === inputs.length - 1) {
+      //   submitFunction(); // This might be too aggressive
+      // }
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        if (!e.target.value && idx > 0) {
+          inputs[idx - 1].focus();
+          inputs[idx - 1].value = ''; // Clear previous on backspace if current is empty
+        } else if (e.target.value) {
+          // Allow default behavior to clear current input
+        }
+      } else if (e.key === 'ArrowLeft' && idx > 0) {
+        e.preventDefault();
+        inputs[idx - 1].focus();
+      } else if (e.key === 'ArrowRight' && idx < inputs.length - 1) {
+        e.preventDefault();
+        inputs[idx + 1].focus();
+      } else if (e.key === 'Enter') {
+        submitFunction();
+      } else if (e.key.length === 1 && e.key.match(/[a-z]/i)) {
+        // Ensure only single letters are processed if not handled by maxlength
+        // Also, auto-capitalize if desired, or handle in CSS
+        e.target.value = ''; // Clear before new input if needed, or rely on maxlength
+      }
+    });
+  });
+  // Focus the first input field by default
+  if (inputs.length > 0) {
+    inputs[0].focus();
+  }
+}
+
 function updateStats() {
   document.getElementById('gold-stat').textContent = "🪙 " + player.gold;
   saveAll();
