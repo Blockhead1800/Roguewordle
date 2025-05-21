@@ -1,4 +1,76 @@
 window._endlessEnterHandler = null;
+
+// Global state for new input system
+let gameActiveInputRow = null;
+let gameCurrentTileIndex = 0;
+let gameCurrentGuess = [];
+let gameCurrentWordLength = 0;
+
+// Helper to update visual marker for the current tile
+function updateActiveTileMarker() {
+  if (gameActiveInputRow) {
+    for (let i = 0; i < gameActiveInputRow.children.length; i++) {
+      gameActiveInputRow.children[i].classList.remove('current-letter-tile');
+    }
+    if (gameCurrentTileIndex < gameCurrentWordLength) {
+      gameActiveInputRow.children[gameCurrentTileIndex].classList.add('current-letter-tile');
+    }
+  }
+}
+
+// Helper to initialize or reset state for a new active input row
+function initializeNewActiveInputRow() {
+  gameActiveInputRow = document.querySelector(".active-input-row");
+  if (gameActiveInputRow) {
+    gameCurrentWordLength = gameActiveInputRow.children.length;
+    gameCurrentTileIndex = 0;
+    gameCurrentGuess = Array(gameCurrentWordLength).fill('');
+    // Ensure all tiles are clear initially for the new active row
+    for (let i = 0; i < gameCurrentWordLength; i++) {
+        if(gameActiveInputRow.children[i]) gameActiveInputRow.children[i].textContent = '';
+    }
+    updateActiveTileMarker();
+  } else {
+    // No active row, reset state (e.g., end of game)
+    gameCurrentTileIndex = 0;
+    gameCurrentGuess = [];
+    gameCurrentWordLength = 0;
+  }
+}
+
+// Global keydown handler for the new input system
+function handleGlobalKeyDown(event) {
+  if (document.querySelector(".modal-bg")) return; // Ignore input if modal is open
+
+  if (!gameActiveInputRow) return; // No active row, ignore
+
+  const key = event.key;
+
+  if (key.match(/^[a-zA-Z]$/) && gameCurrentTileIndex < gameCurrentWordLength) {
+    event.preventDefault(); // Prevent default browser action for letters
+    gameCurrentGuess[gameCurrentTileIndex] = key.toLowerCase();
+    gameActiveInputRow.children[gameCurrentTileIndex].textContent = key.toUpperCase();
+    gameCurrentTileIndex++;
+    updateActiveTileMarker();
+  } else if (key === 'Backspace' && gameCurrentTileIndex > 0) {
+    event.preventDefault(); // Prevent default browser action for backspace
+    gameCurrentTileIndex--;
+    gameCurrentGuess[gameCurrentTileIndex] = '';
+    gameActiveInputRow.children[gameCurrentTileIndex].textContent = '';
+    updateActiveTileMarker();
+  } else if (key === 'Enter' && gameCurrentTileIndex === gameCurrentWordLength) {
+    event.preventDefault(); // Prevent default browser action for enter
+    const submittedWord = gameCurrentGuess.join('');
+    // Call appropriate submit function based on current game mode
+    if (typeof window.submitGuess === 'function' && !isEndless) { // Check if normal game's submitGuess is available
+        window.submitGuess(submittedWord);
+    } else if (typeof window.submitGuessEndless === 'function' && isEndless) { // Check if endless game's submitGuessEndless is available
+        window.submitGuessEndless(submittedWord);
+    }
+  }
+}
+
+
 // EXTRA LIFE: Add 6th upgrade for extra life in endless mode
 const UPGRADE_MAX = [1, 5, 5, 5, 5, 2, 3]; // EXTRA LIFE, Added Word Reroll (index 6)
 const UPGRADE_COSTS = [30, 25, 15, 10, 17, 40, 25]; // EXTRA LIFE, Added Word Reroll cost
@@ -95,6 +167,8 @@ function quitEndless() {
     document.removeEventListener('keydown', window._endlessEnterHandler);
     window._endlessEnterHandler = null;
   }
+  document.removeEventListener('keydown', handleGlobalKeyDown);
+  initializeNewActiveInputRow(); // Clear input state
   // Stop timer if exists
   if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
     clearInterval(endlessRoundTimer);
@@ -234,6 +308,30 @@ function startEndlessGame() {
       tileRowHTML(guess, target)
     ).join("");
     document.getElementById('tiles').innerHTML = guessRows;
+
+    // Generate empty guess rows
+    let emptyRowsHTML = "";
+    for (let i = 0; i < totalGuesses - guessesThis.length; i++) {
+      let rowClass = "input-tile-row";
+      if (i === 0) {
+        rowClass += " active-input-row";
+      } else {
+        rowClass += " placeholder-row";
+      }
+      emptyRowsHTML += `<div class="${rowClass}">`;
+      for (let j = 0; j < len; j++) {
+        let tileClass = "input-tile";
+        if (i === 0 && j === 0) { // First tile of active row
+          // tileClass += " active-tile"; // Optional: for styling the current letter input caret
+        } else if (i !== 0) {
+          tileClass += " placeholder-tile";
+        }
+        emptyRowsHTML += `<span class="${tileClass}"></span>`;
+      }
+      emptyRowsHTML += `</div>`;
+    }
+    document.getElementById('tiles').innerHTML += emptyRowsHTML;
+
     updateKeyboardState(guessesThis, target);
     document.getElementById('kb-area').innerHTML = KB_ROWS.map(row =>
       `<div class="kb-row">${row.map(l =>
@@ -242,10 +340,9 @@ function startEndlessGame() {
     ).join("");
     if (timerEnabled && document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
     if(!showAnswer && !isRoundOver()) {
-      let inp = document.getElementById('guess-inp');
-      inp && inp.focus();
-      inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuessEndless();});
+      // Input focus and onkeyup are handled by global listener now
     }
+    initializeNewActiveInputRow(); // Initialize for the current row
     if(showAnswer) {
 // Store a reference so quitEndless() can remove it later
         if (!window._endlessEnterHandler) window._endlessEnterHandler = handleNextWordEnter;
@@ -412,13 +509,13 @@ function startEndlessGame() {
     }, 1000);
   }
 
-  function submitGuessEndless() {
+  function submitGuessEndless(submittedWord) {
     let isBoss = getIsBossRound();
     let len = isBoss?7:5;
     let target = endlessWordList[curWord];
-    let val = document.getElementById('guess-inp').value.trim().toLowerCase();
+    let val = submittedWord.toLowerCase(); // Use parameter
 
-    if(val.length !== len) return showMsg(`Word must be ${len} letters.`);
+    if(val.length !== len) return showMsg(`Word must be ${len} letters.`); // This check might be redundant if Enter only works on full row
     if(isBoss) {
       if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
         return showMsg("Invalid word.");
@@ -526,18 +623,22 @@ function startEndlessGame() {
       saveAll();
       updateStats();
       // Move gold reward and modal to showEndlessSummary
-      showEndlessSummary(allGuesses, boss);
+      showEndlessSummary(allGuesses, boss); // This will also remove keydown listener
 
-      document.getElementById('game').style.display="none";
-      document.getElementById('menu').style.display="";
-      document.getElementById('upgrade-sidebar').style.display = "none";
-      isEndless = false;
+      // No need to manually hide game elements here if showEndlessSummary does it
+      // document.getElementById('game').style.display="none";
+      // document.getElementById('menu').style.display="";
+      // document.getElementById('upgrade-sidebar').style.display = "none";
+      // isEndless = false; // This should be handled by quitEndless or similar logic
       saveAll();
     }
   }
 
   // Show endless summary and award gold
   function showEndlessSummary(allGuesses, boss) {
+    document.removeEventListener('keydown', handleGlobalKeyDown);
+    initializeNewActiveInputRow(); // Clear input state
+
     allGuesses = []; // This seems to clear the history before display, intentional?
     let prevBestDisplay = STATS.endless.endlessBestWords || 0; // For display comparison
     let goldEarned = 0;
@@ -761,9 +862,12 @@ function beginRun() {
     document.removeEventListener('keydown', window._endlessEnterHandler);
     window._endlessEnterHandler = null;
   }
+  document.removeEventListener('keydown', handleGlobalKeyDown); // Remove previous if any
+  document.addEventListener('keydown', handleGlobalKeyDown); // Add for new game
+
   upgrades = upgradeLevels.map(x=>!!x);
-  const inp = document.getElementById('guess-inp');
-  if (inp) inp.onkeyup = null;
+  // const inp = document.getElementById('guess-inp'); // Not used anymore
+  // if (inp) inp.onkeyup = null; // Not used anymore
   // Ensure all endless mode variables are reset before regular run
   endlessWordList = [];
   
@@ -771,7 +875,7 @@ function beginRun() {
   endlessUpgradeUses = [0, 0, 0, 0, 0, 0, 0]; // EXTRA LIFE, Added slot for reroll
   hideMenu();
   showGame();
-  startGame();
+  startGame(); // This will call render, which calls initializeNewActiveInputRow
 }
 function showShop() {
   showModal(`
@@ -1058,8 +1162,7 @@ function startGame() {
       <div id="tiles"></div>
       ${wordHintHistory[curWord].length ? `<div class="hint-history"><b>Hints:</b><br>${wordHintHistory[curWord].map(h=>h).join("<br>")}</div>`:""}
       ${!showAnswer && !isRoundOver() ? `
-        <input type="text" class="guess-input" id="guess-inp" maxlength="${len}" autocomplete="off" placeholder="${len}-letter word">
-        <button class="menu-btn" style="width:100%;" onclick="submitGuess()">Guess</button>
+        
       ` : ""}
       <div class="message" id="game-msg">${msg}</div>
       ${showAnswer ? `
@@ -1075,6 +1178,30 @@ function startGame() {
       tileRowHTML(guess, target)
     ).join("");
     document.getElementById('tiles').innerHTML = guessRows;
+
+    // Generate empty guess rows
+    let emptyRowsHTML = "";
+    for (let i = 0; i < totalGuesses - guessesThis.length; i++) {
+      let rowClass = "input-tile-row";
+      if (i === 0) {
+        rowClass += " active-input-row";
+      } else {
+        rowClass += " placeholder-row";
+      }
+      emptyRowsHTML += `<div class="${rowClass}">`;
+      for (let j = 0; j < len; j++) {
+        let tileClass = "input-tile";
+        if (i === 0 && j === 0) { // First tile of active row
+          // tileClass += " active-tile"; // Optional: for styling the current letter input caret
+        } else if (i !== 0) {
+          tileClass += " placeholder-tile";
+        }
+        emptyRowsHTML += `<span class="${tileClass}"></span>`;
+      }
+      emptyRowsHTML += `</div>`;
+    }
+    document.getElementById('tiles').innerHTML += emptyRowsHTML;
+
     updateKeyboardState(guessesThis, target);
     document.getElementById('kb-area').innerHTML = KB_ROWS.map(row =>
       `<div class="kb-row">${row.map(l =>
@@ -1083,10 +1210,9 @@ function startGame() {
     ).join("");
     if (timerEnabled && document.getElementById('timer-val')) document.getElementById('timer-val').textContent = timeLeft;
     if(!showAnswer && !isRoundOver()) {
-      let inp = document.getElementById('guess-inp');
-      inp && inp.focus();
-      inp && (inp.onkeyup = e=>{if(e.key==="Enter") submitGuess();});
+      // Input focus and onkeyup are handled by global listener now
     }
+    initializeNewActiveInputRow(); // Initialize for the current row
     if(showAnswer) {
       // Remove any existing event listener first
       if (window._nextWordEnterHandler) {
@@ -1215,13 +1341,13 @@ function startGame() {
     }, 1000);
   }
 
-  function submitGuess() {
+  function submitGuess(submittedWord) {
     let isBoss = boss && curWord === words;
     let len = isBoss?7:5;
     let target = isBoss?bossWord:wordList[curWord];
-    let val = document.getElementById('guess-inp').value.trim().toLowerCase();
+    let val = submittedWord.toLowerCase(); // Use parameter
 
-    if(val.length !== len) return showMsg(`Word must be ${len} letters.`);
+    if(val.length !== len) return showMsg(`Word must be ${len} letters.`); // Might be redundant
     if(isBoss) {
       if(!SEVEN_LETTER_GUESS_WORDS.includes(val))
         return showMsg("Invalid word.");
@@ -1284,11 +1410,8 @@ function startGame() {
     render();
   }
   window.nextWord = function() {
-    // Remove any existing event listeners before starting new word
-    const inp = document.getElementById('guess-inp');
-    if (inp) {
-        inp.onkeyup = null;  // Clear the old event listener
-    }
+    // Old input event listeners are removed or not added.
+    // Global listener handles input.
     
     showAnswer = false;
     timeLeft = 60;
@@ -1302,16 +1425,10 @@ function startGame() {
       showSummary();
       return;
     }
-    render();
+    render(); // This will call initializeNewActiveInputRow
     startTimer();
     
-    // Set up new event listener for the new word
-    const newInp = document.getElementById('guess-inp');
-    if (newInp) {
-        newInp.onkeyup = e => {
-            if(e.key === "Enter") submitGuess();
-        };
-    }
+    // New input listener is already global. No need to set up per-input field.
   };
 
   function updateKeyboardState(guessesArr, target) {
@@ -1344,10 +1461,13 @@ window.quitRun = function() {
         document.removeEventListener('keydown', window._summaryEnterHandler);
         window._summaryEnterHandler = null;
     }
-    const inp = document.getElementById('guess-inp');
-    if (inp) {
-        inp.onkeyup = null;
-    }
+    // const inp = document.getElementById('guess-inp'); // Not used
+    // if (inp) { // Not used
+    //     inp.onkeyup = null; // Not used
+    // }
+    document.removeEventListener('keydown', handleGlobalKeyDown);
+    initializeNewActiveInputRow(); // Clear input state
+
     hideGame();
     showMenu();
     saveAll();
@@ -1358,6 +1478,9 @@ window.quitRun = function() {
         document.removeEventListener('keydown', window._nextWordEnterHandler);
         window._nextWordEnterHandler = null;
     }
+    document.removeEventListener('keydown', handleGlobalKeyDown);
+    initializeNewActiveInputRow(); // Clear input state
+
     let goldEarned = 0;
     if(isEasyMode) {
       goldEarned = correct * 4;
@@ -1398,14 +1521,14 @@ window.quitRun = function() {
         quitRun();
       }
     };
-    document.addEventListener('keydown', window._summaryEnterHandler);
-    document.getElementById('game').style.display="none";
-    document.getElementById('menu').style.display="";
+  document.addEventListener('keydown', window._summaryEnterHandler); // This is for summary modal, not game input
+  // document.getElementById('game').style.display="none"; // Done by quitRun
+  // document.getElementById('menu').style.display=""; // Done by quitRun
     document.getElementById('upgrade-sidebar').style.display = "none";
     saveAll();
   }
   render();
-  startTimer();
+  startTimer(); // This will call render, which calls initializeNewActiveInputRow
 }
 function tileRowHTML(guess, target) {
   const colors = getTileColors(guess, target);
@@ -1527,15 +1650,18 @@ function beginRun() {
     document.removeEventListener('keydown', window._endlessEnterHandler);
     window._endlessEnterHandler = null;
   }
+  document.removeEventListener('keydown', handleGlobalKeyDown); // Remove previous if any
+  document.addEventListener('keydown', handleGlobalKeyDown);   // Add for new game
+
   upgrades = upgradeLevels.map(x=>!!x);
-  const inp = document.getElementById('guess-inp');
-  if (inp) inp.onkeyup = null;
+  // const inp = document.getElementById('guess-inp'); // Not used
+  // if (inp) inp.onkeyup = null; // Not used
   endlessWordList = [];
   endlessWordsSolved = 0;
   endlessUpgradeUses = [0, 0, 0, 0, 0, 0, 0];
   hideMenu();
   showGame();
-  startGame();
+  startGame(); // Calls render -> initializeNewActiveInputRow
 }
 function beginEndless() {
   upgrades = upgradeLevels.map(x=>!!x);
@@ -1548,13 +1674,18 @@ function beginEndless() {
     clearInterval(endlessRoundTimer);
     endlessRoundTimer = null;
   }
+  document.removeEventListener('keydown', handleGlobalKeyDown); // Remove previous if any
+  document.addEventListener('keydown', handleGlobalKeyDown);   // Add for new game
   hideMenu();
   showGame();
-  startEndlessGame();
+  startEndlessGame(); // Calls render -> initializeNewActiveInputRow
 }
 // In quitRun and quitEndless, hide game and show menu
 window.quitRun = function() {
   clearInterval(roundTimer);
+  document.removeEventListener('keydown', handleGlobalKeyDown);
+  initializeNewActiveInputRow(); // Clear input state
+
   hideGame();
   showMenu();
   saveAll();
@@ -1565,6 +1696,9 @@ function quitEndless() {
     document.removeEventListener('keydown', window._endlessEnterHandler);
     window._endlessEnterHandler = null;
   }
+  document.removeEventListener('keydown', handleGlobalKeyDown);
+  initializeNewActiveInputRow(); // Clear input state
+
   if (typeof endlessRoundTimer !== "undefined" && endlessRoundTimer !== null) {
     clearInterval(endlessRoundTimer);
     endlessRoundTimer = null;
