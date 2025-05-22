@@ -242,6 +242,7 @@ function startEndlessGame() {
 
   wordHintHistory[0] = [];
   // No runsPlayed increment for endless, but you could add if desired
+  STATS.endless.runsPlayed += 1; STATS.total.runsPlayed += 1;
   saveAll();
 
   function getIsBossRound() {
@@ -950,18 +951,20 @@ function showStats(modeToDisplay = 'total') {
   let generalStatsHTML = `
     <tr><td class="stats-label">Gold Earned</td><td>${currentStatsView.totalGoldEarned}</td></tr>
     <tr><td class="stats-label">Runs Played</td><td>${currentStatsView.runsPlayed !== undefined ? currentStatsView.runsPlayed : 'N/A'}</td></tr>
-    <tr><td class="stats-label">Runs Completed</td><td>${currentStatsView.runsCompleted !== undefined ? currentStatsView.runsCompleted : 'N/A'}</td></tr>
   `;
 
   if (modeToDisplay === 'normal') {
     generalStatsHTML += `
+      <tr><td class="stats-label">Runs Completed</td><td>${currentStatsView.runsCompleted !== undefined ? currentStatsView.runsCompleted : 'N/A'}</td></tr>
       <tr><td class="stats-label">Best Run (Words)</td><td>${currentStatsView.bestRunWords||0}</td></tr>
       <tr><td class="stats-label">Best Run (Bosses)</td><td>${currentStatsView.bestRunBoss||0}</td></tr>
       <tr><td class="stats-label">Best Run (Least Guesses)</td><td>${currentStatsView.bestRunGuesses||"—"}</td></tr>
+      <tr><td class="stats-label">Average Words Right Per Run</td><td>${STATS.normal.totalWordsSolved / STATS.normal.runsPlayed}</td></tr>
     `;
   } else if (modeToDisplay === 'endless') {
     generalStatsHTML += `
       <tr><td class="stats-label">Best Endless Run (Words)</td><td>${currentStatsView.endlessBestWords||0}</td></tr>
+      <tr><td class="stats-label">Average Words Right Per Run</td><td>${STATS.endless.totalWordsSolved / STATS.endless.runsPlayed}</td></tr>
     `;
   } else { // Total
     generalStatsHTML += `
